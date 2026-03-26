@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-22 08:37:38
+ * @LastEditTime: 2026-03-26 16:56:54
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -28,6 +28,7 @@
 #include "Gimbal.h"
 #include "Global_status.h"
 #include "remote_control.h"
+#include "Shoot.h"
 
 #include "referee_system.h"
 #include "supercup.h"
@@ -204,8 +205,8 @@ void Mode_Switch()
         nav_offline_dash_finished = 0;
 
         /* 遥控器输入处理 */
-        Global.Chassis.input.x = RC_data.rc.ch[1] / 2.0f;
-        Global.Chassis.input.y = -RC_data.rc.ch[0] / 2.0f;
+        Global.Chassis.input.x = (RC_data.rc.ch[1] / 2.0f * WHEEL_RADIUS) / (30 * Rotation_radius);
+        Global.Chassis.input.y = (-RC_data.rc.ch[0] / 2.0f * WHEEL_RADIUS) / (30 * Rotation_radius);
 
         /* 计算相对角度 */
         Chassis.relative_angle = relative_angle;
@@ -232,14 +233,14 @@ void Mode_Switch()
                 // 通信中断时，停止自旋跟随，防止疯转
                 R_speed = 0;
             } */
-             Global.Chassis.input.r =  -RC_data.rc.ch[2] / 5.0f;  
+             Global.Chassis.input.r =  (-RC_data.rc.ch[2] / 5.0f * WHEEL_RADIUS) / (30 * Rotation_radius);  
         }
         else if (Global.Chassis.mode == FLOW_Gimbal)
         {
             if (fabs(Chassis.relative_angle) > 2.0f)
             {
                 // 出现180度振荡说明是正反馈，PID输出需要反向
-                Global.Chassis.input.r = -PID_Cal(&Chassis.chassis_follow_pid, Chassis.relative_angle, 0) * RPM_TO_DEG_S; 
+                Global.Chassis.input.r = -PID_Cal(&Chassis.chassis_follow_pid, Chassis.relative_angle, 0) * RPM_TO_RAD_S; 
             }
             else
             {
@@ -248,11 +249,11 @@ void Mode_Switch()
         }
         else if (Global.Chassis.mode == SPIN_P)
         {
-            Global.Chassis.input.r = 80 * RPM_TO_DEG_S;       
+            Global.Chassis.input.r = 80 * RPM_TO_RAD_S;       
         }
         else // SPIN_N
         {
-            Global.Chassis.input.r = -120 * RPM_TO_DEG_S;
+            Global.Chassis.input.r = -120 * RPM_TO_RAD_S;
         }
         break;
 
@@ -263,9 +264,9 @@ void Mode_Switch()
         { */
             if (Navigation_receive_1.x_speed != 0 || Navigation_receive_1.y_speed != 0)
         {
-            Global.Chassis.input.x = Navigation_receive_1.x_speed * 200.0f;
-            Global.Chassis.input.y = Navigation_receive_1.y_speed * 200.0f;
-            Global.Chassis.input.r = 0.0f;
+            Global.Chassis.input.x = Navigation_receive_1.x_speed;
+            Global.Chassis.input.y = Navigation_receive_1.y_speed;
+            Global.Chassis.input.r = 60 * RPM_TO_RAD_S;
         }
         else
         {
@@ -281,11 +282,11 @@ void Mode_Switch()
 
                                 if (hurt_high_spin_latched)
                                 {
-                                    Global.Chassis.input.r = 108 * RPM_TO_DEG_S;
+                                    Global.Chassis.input.r = 108 * RPM_TO_RAD_S;
                                 }
                                 else
                                 {
-                                    Global.Chassis.input.r = 80 * RPM_TO_DEG_S;
+                                    Global.Chassis.input.r = 80 * RPM_TO_RAD_S;
                                 }
                             }
                         else
@@ -411,42 +412,9 @@ void Chassis_Tasks(void)
     if(Navigation_online > 0) Navigation_online--;
     //模式切换
     Mode_Switch();
-/* --- 插入点：功率限制逻辑 --- */
-    
-// A. 获取基础限制 (来自裁判系统)
-    /* float power_limit = (float)Referee_data.Chassis_Power_Limit;
-    if(power_limit < 40.0f) power_limit = 40.0f; // 兜底防止为0
-
-    // B. 获取超级电容状态 (线性动态策略 + 低压保护)
-    float cap_extra_power = 0.0f;
-    const float CAP_MIN_VOL = 13.0f;    // 线性透支起始电压
-    const float POWER_PER_VOLT = 15.0f; // 每伏特电压转换的功率系数
-    
-    // 直接读取 supercup 模块更新的 cap 结构体
-    if (cap.remain_vol > CAP_MIN_VOL) 
-    {
-        // 线性增益：电压越高，透支越多，实现无级变速
-        cap_extra_power = (cap.remain_vol - CAP_MIN_VOL) * POWER_PER_VOLT;
-        // 物理上限保护 (例如电容板最大输出200W)
-        if (cap_extra_power > 200.0f) cap_extra_power = 200.0f;
-    }
-    else 
-    {
-        // 低压保护：电压过低时主动降低功率限制，让电源管理模块给电容回血
-        cap_extra_power = -10.0f; 
-    }
-
-    // 计算最终可用功率，并保留最低行驶功率
-    float final_limit = power_limit + cap_extra_power;
-    if (final_limit < 20.0f) final_limit = 20.0f; */
-    
-    // C. 执行双限制器控制 
-    // 修改 Chassis 结构体中的电流值 (wheel_current_xx 和 current_steer_xx)
-    /* Chassis_PowerControl_Total(final_limit); */
     
 #endif
 }
-
 
 
 /*-------------------- Set --------------------*/
@@ -488,22 +456,14 @@ void Chassis_SetAccel(float acc)
 
 }
 
-
-
-void Send_to_Chassis_1()
+static void Pack_XY_Speed(uint8_t data[8])
 {
-    /* if(Global.Control.mode == LOCK) return; */
-    uint8_t can_send_data[8]; // 发送缓冲区
-    float_to_bytes(X_speed, &can_send_data[0]);
-    float_to_bytes(Y_speed, &can_send_data[4]);
-    Fdcanx_SendData(&hfdcan2, CAN_ID_CHASSIS_SPEED_XY, can_send_data, 8);
-                                                                                                                                                                                                                                                                           
+    float_to_bytes(X_speed,                             &data[0]);
+    float_to_bytes(Y_speed,                             &data[4]);
 }
 
-void Send_to_Chassis_2()
+static void Pack_R_Yaw(uint8_t data[8])
 {
-    /* if(Global.Control.mode == LOCK) return; */
-    uint8_t can_send_data[8]; // 发送缓冲区
     float encoder_relative = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     
     if (Global.Auto.input.fire != -1 && Global.Auto.input.Auto_control_online > 0)
@@ -514,47 +474,72 @@ void Send_to_Chassis_2()
     }
     else
     {
-        // 非自瞄（遥控/导航）：保持现有逻辑
+        // 非自瞄（遥控/导航）
         Gimbal.big_yaw.big_yaw_location_set = Global.Gimbal.input.yaw; 
-        // 注意：非自瞄模式也可能有坐标系问题，但那是另一个话题
     }
-    float_to_bytes(R_speed, &can_send_data[0]);
-    float_to_bytes(Gimbal.big_yaw.big_yaw_location_set, &can_send_data[4]);
-    Fdcanx_SendData(&hfdcan2, CAN_ID_CHASSIS_SPEED_R_YAW, can_send_data, 8);
+    float_to_bytes(R_speed,                             &data[0]);
+    float_to_bytes(Gimbal.big_yaw.big_yaw_location_set, &data[4]);
 }
 
-void Send_to_Chassis_3()
-{/* if(Global.Control.mode == LOCK) return; */
-    
-    uint8_t can_send_data[8]; // 发送缓冲区
-    float_to_bytes(Global.Control.mode, &can_send_data[0]);
-    float_to_bytes(Global.Chassis.mode, &can_send_data[4]);
-    Fdcanx_SendData(&hfdcan2, CAN_ID_CHASSIS_MODE, can_send_data, 8);
-}
-
-void Send_to_Chassis_4()
-{/* if(Global.Control.mode == LOCK) return; */
-    
-    uint8_t can_send_data[8];
-    float_to_bytes(imu_chassis.pitch, &can_send_data[0]);
-    float_to_bytes(imu_chassis.yaw_cnt, &can_send_data[4]);
-    Fdcanx_SendData(&hfdcan2, CAN_ID_CHASSIS_IMU_ATTITUDE, can_send_data, 8);
-}
-
-void Send_to_Chassis_5()
-{/* if(Global.Control.mode == LOCK) return; */
-    uint8_t can_send_data[8];
-    float_to_bytes(imu_chassis.gyro[0], &can_send_data[0]);
-    float_to_bytes(imu_chassis.gyro[2], &can_send_data[4]);
-    Fdcanx_SendData(&hfdcan2, CAN_ID_CHASSIS_IMU_GYRO, can_send_data, 8);
-}
-
-void Send_to_Chassis_7()
+static void Pack_Control_Mode(uint8_t data[8])
 {
-    uint8_t can_send_data[8];
-    float_to_bytes(Navigation_receive_1.yaw_speed,&can_send_data[0]);
-    uint8_to_bytes(Navigation_receive_1.running_state, &can_send_data[4]); 
-    uint8_to_bytes(fromMINIPC.mode,&can_send_data[5]);
-    uint8_to_bytes(Auto_data.is_scaning,&can_send_data[6]);
-    Fdcanx_SendData(&hfdcan2, CAN_ID_SALTATION_MODE, can_send_data, 8);
+    float_to_bytes(Global.Control.mode,                 &data[0]);
+    float_to_bytes(Global.Chassis.mode,                 &data[4]);
+}
+
+static void Pack_IMU_Attitude(uint8_t data[8])
+{
+    float_to_bytes(imu_chassis.pitch,                   &data[0]);
+    float_to_bytes(imu_chassis.yaw_cnt,                 &data[4]);
+}
+
+static void Pack_IMU_Gyro(uint8_t data[8])
+{
+    float_to_bytes(imu_chassis.gyro[0],                 &data[0]);
+    float_to_bytes(imu_chassis.gyro[2],                 &data[4]);
+}
+
+static void Pack_Saltation_Mode(uint8_t data[8])
+{
+    float_to_bytes(Navigation_receive_1.yaw_speed,      &data[0]);
+    uint8_to_bytes(Navigation_receive_1.running_state,  &data[4]); 
+    uint8_to_bytes(fromMINIPC.mode,                     &data[5]);
+    uint8_to_bytes(Auto_data.is_scaning,                &data[6]);
+}
+
+
+static void Pack_TRIGGER_MODE(uint8_t data[8])
+{
+    float_to_bytes(Global.Shoot.tigger_mode,  &data[0]);    
+}
+
+/*  分频调度表 —— IMU 源 1kHz(TIM13), 全速发送
+ *                                       div  phase
+ *  tick:  0   1   2   3   4   5   6   7   8   9
+ *  帧数:  5   4   5   4   5   4   4   5   4   5   */
+static const CanTxEntry_t ChassisTxTable[] = {
+    /* 1kHz 速度+IMU: 控制环核心 */
+    { CAN_ID_CHASSIS_SPEED_XY,     Pack_XY_Speed,       1, 0 },
+    { CAN_ID_CHASSIS_SPEED_R_YAW,  Pack_R_Yaw,          1, 0 },
+    { CAN_ID_CHASSIS_IMU_ATTITUDE, Pack_IMU_Attitude,   1, 0 },
+    { CAN_ID_CHASSIS_IMU_GYRO,     Pack_IMU_Gyro,       1, 0 },
+    /* 200Hz 模式/状态, 各自错开 */
+    { CAN_ID_CHASSIS_MODE,         Pack_Control_Mode,   5, 0 },
+    { CAN_ID_SHOOT_TRIGGER_MODE,   Pack_TRIGGER_MODE,   5, 2 },
+    { CAN_ID_SALTATION_MODE,       Pack_Saltation_Mode, 5, 4 },
+};
+
+void Chassis_CAN_SendAll(void)
+{
+    static uint8_t tick = 0;
+    uint8_t buf[8];
+
+    for (uint8_t i = 0; i < sizeof(ChassisTxTable)/sizeof(ChassisTxTable[0]); i++) {
+        if (tick % ChassisTxTable[i].divider == ChassisTxTable[i].phase) {
+            ChassisTxTable[i].pack(buf);
+            Fdcanx_SendData(&hfdcan2, ChassisTxTable[i].id, buf, 8);
+        }
+    }
+
+    if (++tick >= 10) tick = 0;  /* LCM(1,2,5)=10, 10ms 一个完整周期 */
 }

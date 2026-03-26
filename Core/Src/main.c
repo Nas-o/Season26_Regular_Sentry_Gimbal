@@ -98,7 +98,7 @@ uint32_t fdcan_freq;
   */
 int main(void)
 
-{
+  {
   /* USER CODE BEGIN 1 */
 
 
@@ -154,8 +154,7 @@ int main(void)
   Refree_system_init();
   imu_init(0x01,0x11,&hfdcan1,&imu_gimbal); 
   imu_init(0x02,0x12,&hfdcan3,&imu_chassis);
-  
-  imu_change_to_request(&imu_gimbal);  
+  imu_change_to_request(&imu_gimbal); 
   imu_change_to_request(&imu_chassis);
 /*   IMU_Init(); */
   HAL_IWDG_Refresh(&hiwdg1);

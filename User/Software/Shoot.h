@@ -66,5 +66,4 @@ typedef struct
 /* 外部调用 */
 void Shoot_Init();
 void Shoot_Tasks();
-void Send_to_Chassis_6();
 #endif 

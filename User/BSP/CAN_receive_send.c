@@ -129,29 +129,8 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
   {
     HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rx_header, rx_data);
 	 
-	 if (rx_header.Identifier == CAN_ID_GIMBAL_RELATIVE_ANGLE)
-   {
-     relative_angle_big_yaw_receive(rx_data);
-     return;
-   }
-
-   if (rx_header.Identifier == CAN_ID_REFEREE_DATA_1)
-   {
-    Receive_from_Chassis_1(rx_data);
-    return;
-   }
-
-    if (rx_header.Identifier == CAN_ID_REFEREE_DATA_2)
-   {
-    Receive_from_Chassis_2(rx_data);
-    return;
-   }
-
-    if (rx_header.Identifier == CAN_ID_REFEREE_DATA_3)
-   {
-    Receive_from_Chassis_3(rx_data);
-    return;
-   }
+    Gimbal_CAN_Dispatch(rx_header.Identifier, rx_data);
+    
     // ≥¨µÁ÷°
     if ((rx_header.Identifier == Supercap_receive_id) ||
         (rx_header.Identifier == Supercap_chassis_power_id))

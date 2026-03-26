@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-22 08:50:48
+ * @LastEditTime: 2026-03-24 16:49:01
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -59,8 +59,8 @@ void Scan()
     const float STEP = 0.15f;                    
 
     // 小 Yaw 扫描参数：相对大 Yaw 往复扫描，自动适配大 Yaw 任意旋转
-    const float SCAN_LIMIT = 60.0f;   // ±55° 相对大Yaw（机械限位±60°，留5°安全余量）
-    const float SCAN_STEP  = 0.18f;   // 90°/s
+    const float SCAN_LIMIT = 60.0f;   // ±60° 相对大Yaw（机械限位±60°，留5°安全余量）
+    const float SCAN_STEP  = 0.18f;   // 180°/s
 
     static float scan_pitch_deg = 0.0f;
     static float scan_offset    = 0.0f;  // 期望的小Yaw相对大Yaw的偏移角度
@@ -372,24 +372,8 @@ void Gimbal_SetYawAngle(float angle)
 {
     Global.Gimbal.input.yaw = angle;
 }
-uint32_t last_relative_angle_time;
-void relative_angle_big_yaw_receive(uint8_t data[8])
-{
-    relative_angle = bytes_to_float(&data[0]);    
-    /* last_relative_angle_time = HAL_GetTick(); */
-}
 
-/**
- * @brief 检查relative_angle是否在线(超时保护)
- * @return 1:在线 0:离线(超时)
- */
-uint8_t Is_Relative_Angle_Online(void)
-{
-    // 假设200ms没收到数据认为掉线，可根据实际频率调整
-    if (HAL_GetTick() - last_relative_angle_time > 200)
-    {
-        return 0;
-    }
-    return 1;}
+
+
 
 

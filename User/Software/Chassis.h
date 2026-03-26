@@ -208,6 +208,7 @@ extern Chassis_t Chassis;
 /*外部调用*/
 void Chassis_Init();
 void Chassis_Tasks();
+void Chassis_CAN_SendAll(void);
 void Chassis_SetX(float x);
 void Chassis_SetY(float y);
 void Chassis_SetR(float r);
@@ -219,12 +220,6 @@ void Mode_Switch();
 float Random_Spin(float min, float max);
 float Generate_Random_Float(float min, float max);
 void Chassis_PowerLimit_Update(float max_power);
-void Send_to_Chassis_1();
-void Send_to_Chassis_2();
-void Send_to_Chassis_3();
-void Send_to_Chassis_4();
-void Send_to_Chassis_5();
-void Send_to_Chassis_7();
 #define CHASSIS_TASK_TIME 1 // 底盘任务刷新间隔
 
 #endif

@@ -167,9 +167,3 @@ void Shoot_Tasks(void)
 #endif
 }
 
-void Send_to_Chassis_6()
-{
-	uint8_t can_send_data[8];
-    float_to_bytes(Global.Shoot.tigger_mode,&can_send_data[0]);    
-	Fdcanx_SendData(&hfdcan2, CAN_ID_SHOOT_TRIGGER_MODE, can_send_data, 8);
-}

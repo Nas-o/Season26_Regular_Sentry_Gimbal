@@ -282,40 +282,41 @@ void Chassis_Task(void *argument)
     Chassis_Tasks(); // 计算控制量（这个每毫秒都要算）
 
     // 2. 根据计数器的值，决定这一毫秒发谁
-    switch (send_tick)
-    {
-      case 0:
-        Send_to_Chassis_1();
-        Send_to_Chassis_2();
-        Send_to_Chassis_3();
-        Send_to_Chassis_7();
-        Send_to_Chassis_6();
-        break;
+    // switch (send_tick)
+    // {
+    //   case 0:
+    //     Send_to_Chassis_1();
+    //     Send_to_Chassis_2();
+    //     Send_to_Chassis_3();
+    //     Send_to_Chassis_7();
+    //     Send_to_Chassis_6();
+    //     break;
       
-      case 1:
-        Send_to_Chassis_3(); 
-        Send_to_Chassis_4();
-        Send_to_Chassis_2();
-        Send_to_Chassis_7();
-        Send_to_Chassis_6();
-        break;
+    //   case 1:
+    //     Send_to_Chassis_3(); 
+    //     Send_to_Chassis_4();
+    //     Send_to_Chassis_2();
+    //     Send_to_Chassis_7();
+    //     Send_to_Chassis_6();
+    //     break;
 
-      case 2:
-        Send_to_Chassis_5(); 
-        Supercup_SendData();
-        Send_to_Chassis_2();
-        Send_to_Chassis_3();
-        Send_to_Chassis_6();
-        Send_to_Chassis_7();
-        break;
-    }
+    //   case 2:
+    //     Send_to_Chassis_5(); 
+    //     Supercup_SendData();
+    //     Send_to_Chassis_2();
+    //     Send_to_Chassis_3();
+    //     Send_to_Chassis_6();
+    //     Send_to_Chassis_7();
+    //     break;
+    // }
 
-    // 3. 计数器加1，并限制范围（0 -> 1 -> 2 -> 0 -> ...）
-    send_tick++;
-    if (send_tick > 2) 
-    {
-        send_tick = 0;
-    }
+    // // 3. 计数器加1，并限制范围（0 -> 1 -> 2 -> 0 -> ...）
+    // send_tick++;
+    // if (send_tick > 2) 
+    // {
+    //     send_tick = 0;
+    // }
+    Chassis_CAN_SendAll();
 
     osDelay(1); // 休息1ms
   }

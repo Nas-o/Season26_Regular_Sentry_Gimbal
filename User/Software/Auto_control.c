@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-20 04:39:57
+ * @LastEditTime: 2026-03-24 19:01:17
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -60,7 +60,7 @@ void decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int
     }
 }
 
-void Receive_from_Chassis_1(uint8_t data[8])
+static void Receive_RefereeData1(uint8_t data[8])
 {
     Referee.current_HP = bytes_to_uint16(&data[0]);
     Referee.maximum_HP = bytes_to_uint16(&data[2]);
@@ -69,7 +69,7 @@ void Receive_from_Chassis_1(uint8_t data[8])
     Referee.stage_remain_time = bytes_to_uint16(&data[6]);
 }
 
-void Receive_from_Chassis_2(uint8_t data[8])
+static void Receive_RefereeData2(uint8_t data[8])
 {
     Referee.projectile_allowance_17mm = bytes_to_uint16(&data[0]);
     Referee.outpost_HP = bytes_to_uint16(&data[2]);
@@ -77,12 +77,34 @@ void Receive_from_Chassis_2(uint8_t data[8])
     Referee.launching_frequency = bytes_to_uint8(&data[6]);
 }
 
-void Receive_from_Chassis_3(uint8_t data[8])
+static void Receive_RefereeData3(uint8_t data[8])
 {
     Referee.rfid_status = bytes_to_float(&data[0]);
     Referee.initial_speed = bytes_to_float(&data[4]);
 }
 
+static void Receive_RelativeAngle(uint8_t data[8])
+{
+    relative_angle = bytes_to_float(&data[0]);
+}
+
+static const CanRxEntry_t GimbalRxTable[] = {
+    { CAN_ID_GIMBAL_RELATIVE_ANGLE,     Receive_RelativeAngle  },
+    { CAN_ID_REFEREE_DATA_1,            Receive_RefereeData1   },
+    { CAN_ID_REFEREE_DATA_2,            Receive_RefereeData2   },
+    { CAN_ID_REFEREE_DATA_3,            Receive_RefereeData3   },
+
+};
+
+void Gimbal_CAN_Dispatch(uint16_t id, uint8_t data[8])
+{
+    for (uint8_t i = 0; i < sizeof(GimbalRxTable)/sizeof(GimbalRxTable[0]); i++) {
+        if (GimbalRxTable[i].id == id) {
+            GimbalRxTable[i].handler(data);
+            return;
+        }
+    }
+}
 /**
  * @brief 向导航发送裁判系统数据
  *

@@ -275,5 +275,6 @@ extern uint8_t Debug_Sentry_Revive_State;
 extern uint32_t Debug_Sentry_Tx_Count;
 extern Referee_data_t Referee;
 extern Auto_Plan_t Auto_data;
+void Gimbal_CAN_Dispatch(uint16_t id, uint8_t data[8]);
 #define NAV_ONLINE_TIMEOUT_MS 200
 #endif
