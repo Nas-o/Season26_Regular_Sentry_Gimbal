@@ -34,8 +34,8 @@
 /*------------------------------------------------- Chassis ----------------------------------------------------------*/
 
 //底盘物理参数
-#define Rotation_radius     (0.26282f)   // (m)轮子中心至旋转中心距离
-#define WHEEL_TRACK         (0.37169f)  // (m)轮组间距        
+#define Rotation_radius     (0.22132) // (m)轮子中心至旋转中心距离
+#define WHEEL_TRACK         (0.313f)  // (m)轮组间距         
 #define WHEEL_RADIUS        (0.064)   // (m)轮子半径
 #define WHEEL_RATIO (15.8f)     // 底盘电机减速比
 

@@ -143,6 +143,8 @@ typedef struct
         {
             float shoot_yaw;
             float shoot_pitch;
+            float yaw_ff;            // yaw速度前馈 (rad/s)
+            float pitch_ff;          // pitch速度前馈 (rad/s)
             int Auto_control_online; // 自瞄在线
             int8_t fire;             // -1:自瞄在线但未发现目标，0：发现目标，1：允许开火
             uint8_t target_id;       // 目标ID

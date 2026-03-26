@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-24 16:49:01
+ * @LastEditTime: 2026-03-26 18:45:39
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -230,9 +230,9 @@ void Gimbal_Updater()
  */
 void Gimbal_Calculater()
 {
- 
+
     if ((Global.Auto.input.Auto_control_online <= 0 || Global.Auto.mode == NONE || Global.Auto.input.fire == -1) && Global.Gimbal.mode == NORMAL)
-    { 
+    {
         // 非自瞄 
         Gimbal.small_yaw.small_yaw_speed_set =  PID_Cal(&Gimbal.small_yaw.small_yaw_location_pid, Gimbal.small_yaw.small_yaw_location_now,Gimbal.small_yaw.small_yaw_location_set);  
         Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set); 
@@ -242,7 +242,8 @@ void Gimbal_Calculater()
     }
     else
     { 
-        Gimbal.small_yaw.small_yaw_speed_set = PID_Cal(&Gimbal.small_yaw.small_yaw_auto_location_pid, Gimbal.small_yaw.small_yaw_location_now, Gimbal.small_yaw.small_yaw_location_set);
+        Gimbal.small_yaw.small_yaw_speed_set = PID_Cal(&Gimbal.small_yaw.small_yaw_auto_location_pid, Gimbal.small_yaw.small_yaw_location_now, Gimbal.small_yaw.small_yaw_location_set)
+                                              + Global.Auto.input.yaw_ff;
         Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_auto_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set);
         
         Global.Auto.input.Auto_control_online--;
@@ -289,9 +290,14 @@ void Gimbal_Controller()
              // 目标位置需要加上Offset，转换到电机坐标系
              float pitch_target_motor = Gimbal.pitch.pitch_location_set + Gimbal.pitch.pitch_offset;
              
+             // Pitch: DM电机MIT模式, 自瞄时注入速度前馈
+             float pitch_vel_ff = 0;
+             if (Global.Auto.input.fire != -1 && Global.Auto.input.Auto_control_online > 0)
+                 pitch_vel_ff = Global.Auto.input.pitch_ff;
+             
              DMMotor_Set(PITCHMotor, 
                          pitch_target_motor,                // 目标位置 
-                         0,                                 // 目标速度
+                         pitch_vel_ff,                      // 目标速度(前馈)
                          Gimbal.pitch.gravity_compensation , // 前馈力矩 (重力补偿)
                          Gimbal.pitch.kp,                   // 位置比例增益
                          Gimbal.pitch.kd);                  // 速度阻尼增益
