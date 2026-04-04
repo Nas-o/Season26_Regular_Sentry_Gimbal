@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-26 21:16:37
+ * @LastEditTime: 2026-04-02 21:31:52
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -63,7 +63,7 @@ void Chassis_Init()
 {
 
     /*µ×ÅÌ¸úËæPID*/
-    PID_Set(&Chassis.chassis_follow_pid, 1.8f, 0.0f, 0.3f, 0.0f, 200, 40);
+    PID_Set(&Chassis.chassis_follow_pid, 1.0f, 0.0f, 0.5f, 0.0f, 200, 40);
     /*µ×ÅÌ¹¦ÂÊ¿ØÖÆpid*/
 
 
@@ -253,7 +253,7 @@ void Mode_Switch()
         }
         else // SPIN_N
         {
-            Global.Chassis.input.r = -120 * RPM_TO_RAD_S;
+            Global.Chassis.input.r = -150 * RPM_TO_RAD_S;
         }
         break;
 

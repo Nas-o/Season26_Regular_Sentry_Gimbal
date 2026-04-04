@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-26 18:45:39
+ * @LastEditTime: 2026-04-04 21:48:31
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -60,7 +60,7 @@ void Scan()
 
     // 小 Yaw 扫描参数：相对大 Yaw 往复扫描，自动适配大 Yaw 任意旋转
     const float SCAN_LIMIT = 60.0f;   // ±60° 相对大Yaw（机械限位±60°，留5°安全余量）
-    const float SCAN_STEP  = 0.18f;   // 180°/s
+    const float SCAN_STEP  = 0.12f;   // 180°/s
 
     static float scan_pitch_deg = 0.0f;
     static float scan_offset    = 0.0f;  // 期望的小Yaw相对大Yaw的偏移角度
@@ -243,7 +243,7 @@ void Gimbal_Calculater()
     else
     { 
         Gimbal.small_yaw.small_yaw_speed_set = PID_Cal(&Gimbal.small_yaw.small_yaw_auto_location_pid, Gimbal.small_yaw.small_yaw_location_now, Gimbal.small_yaw.small_yaw_location_set)
-                                              + Global.Auto.input.yaw_ff;
+                                              + rad2degree(Global.Auto.input.yaw_ff);
         Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_auto_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set);
         
         Global.Auto.input.Auto_control_online--;
@@ -261,17 +261,32 @@ void Gimbal_Calculater()
 void Gimbal_Controller()
 {
     static uint8_t last_mode = LOCK;
+    static uint8_t last_chassis_mode = FLOW_Chassis;
     static uint8_t first_run = 1;
 
     // 第一帧初始化 last_mode
     if (first_run)
     {
         last_mode = Global.Control.mode;
+        last_chassis_mode = Global.Chassis.mode;
         first_run = 0;
     }
 
     if (Global.Control.mode != LOCK)
    {
+        // 判断小yaw是否需要泄力 (FLOW_Chassis模式下泄力)
+        uint8_t small_yaw_release = (Global.Chassis.mode == FLOW_Chassis);
+
+        // 从FLOW_Chassis切出的瞬间：同步目标位置为当前位置，防止跳变
+        if (last_chassis_mode == FLOW_Chassis && !small_yaw_release)
+        {
+            Global.Gimbal.input.yaw = Gimbal.small_yaw.small_yaw_location_now;
+            Gimbal.small_yaw.small_yaw_location_set = Gimbal.small_yaw.small_yaw_location_now;
+            // 清空速度环积分，防止切模式时积累量导致冲击
+            Gimbal.small_yaw.small_yaw_speed_pid.i_out = 0;
+            Gimbal.small_yaw.small_yaw_auto_speed_pid.i_out = 0;
+        }
+
         // 重力补偿前馈力矩计算
         Gimbal.pitch.gravity_compensation = Gimbal.pitch.k_gravity * cos(Gimbal.pitch.pitch_location_now);
 
@@ -308,7 +323,11 @@ void Gimbal_Controller()
              DMMotor_Set(PITCHMotor, 0, 0, 0, 0, 0.0f); 
         }
         
-        DJIMotor_Set(Gimbal.small_yaw.current,SMALLYAWMotor); 
+        // 小yaw：FLOW_Chassis模式下泄力，其他模式正常输出
+        if (small_yaw_release)
+            DJIMotor_Set(0, SMALLYAWMotor);
+        else
+            DJIMotor_Set(Gimbal.small_yaw.current, SMALLYAWMotor); 
    }
    else
    {
@@ -317,6 +336,7 @@ void Gimbal_Controller()
    }
    
    last_mode = Global.Control.mode;
+   last_chassis_mode = Global.Chassis.mode;
 
 }
 
