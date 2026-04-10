@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-10-24 19:37:34
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-19 22:18:34
+ * @LastEditTime: 2026-04-08 05:12:08
  * @FilePath: \Season26_Regular_Sentry_Gimbal\Core\Src\freertos.c
  */
 /* USER CODE BEGIN Header */
@@ -39,6 +39,9 @@
 #include "Auto_control.h"
 #include "shoot.h"
 #include "music.h"
+
+#include "dm_imu.h"
+#include <math.h>
 
 #include "referee_system.h"
 #include "supercup.h"
@@ -253,9 +256,12 @@ void Gimbal_Task(void *argument)
   /* Infinite loop */
   for(;;)
   {
+    /* 自瞄全流程: 链路 → 消抖 → 边沿 → 规划 → fire gate → 调试帧 */
+    AutoAim_Update();
+
+    /* 云台控制 (纯执行层: Updater → Calculater → Controller) */
     Gimbal_Tasks();
-    
-    
+
     osDelay(1);
   }
   /* USER CODE END Gimbal_Task */
@@ -380,10 +386,7 @@ void Shoot_Task(void *argument)
   for(;;)
   {
 
-  if(Global.Auto.mode != NONE && Global.Auto.input.Auto_control_online > 0 && Global.Auto.input.fire != -1)
-  {
-    Auto_Control();
-  }
+  /* Auto_Control 已移至 Gimbal_Task 内执行，保证同周期生效 */
 
   Shoot_Tasks();
   osDelay(1);

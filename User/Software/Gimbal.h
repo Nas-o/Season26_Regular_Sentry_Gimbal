@@ -58,6 +58,9 @@ typedef struct
     float pitch_offset;
     uint8_t init_flag; // 初始化完成标志
     float gravity_compensation; //重力补偿
+    float gravity_integral;       // 外环积分力矩补偿（消除静摩擦/模型残差导致的稳态偏差）
+    float ki_gravity;             // 积分增益
+    float gravity_integral_limit; // 积分限幅 (N·m)
   }pitch;
 
   struct
@@ -98,7 +101,6 @@ void Gimbal_Tasks();
 void Gimbal_SetPitchAngle(float angle);
 void Gimbal_SetYawAngle(float angle);
 void Gimbal_Limit(float pitch_up_angle, float pitch_down_angle, float yaw_L_angle, float yaw_R_angle);
-void Scan();
 extern Gimbal_t Gimbal;
 // 添加 volatile 防止编译器优化导致的变量读取不同步
 extern float relative_angle;

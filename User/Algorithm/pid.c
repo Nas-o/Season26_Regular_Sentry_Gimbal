@@ -49,3 +49,15 @@ float PID_Cal(pid_t *PidGoal,float Now,float Set)//PID??
 	
   return PidGoal->total_out;
 }
+
+void PID_Reset(pid_t *pid)
+{
+    pid->err      = 0;
+    pid->err_last = 0;
+    pid->diff     = 0;
+    pid->p_out    = 0;
+    pid->i_out    = 0;
+    pid->d_out    = 0;
+    pid->f_out    = 0;
+    pid->total_out = 0;
+}

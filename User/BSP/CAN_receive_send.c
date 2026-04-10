@@ -129,8 +129,8 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
   {
     HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rx_header, rx_data);
 	 
-    Gimbal_CAN_Dispatch(rx_header.Identifier, rx_data);
-    
+    if (Gimbal_CAN_Dispatch(rx_header.Identifier, rx_data))
+    return;  // 双板消息处理完即退出，不再走电机解码
     // 超电帧
     if ((rx_header.Identifier == Supercap_receive_id) ||
         (rx_header.Identifier == Supercap_chassis_power_id))

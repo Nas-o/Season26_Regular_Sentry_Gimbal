@@ -10,30 +10,6 @@
 #include "stdint.h"
 #include "main.h"
 
-#define WAIT_W 0
-#define WAIT_S 1
-#define WAIT_A 2
-#define WAIT_D 3
-#define WAIT_Q 4
-#define WAIT_E 5
-#define WAIT_G 6
-#define WAIT_X 7
-#define WAIT_Z 8
-#define WAIT_C 9
-#define WAIT_B 10
-#define WAIT_V 11
-#define WAIT_F 12
-#define WAIT_R 13
-#define WAIT_CTRL 14
-#define WAIT_SHIFT 15
-#define WAIT_CTRL_Q 16
-#define WAIT_CTRL_E 17
-#define WAIT_MOUSE_Z 18
-#define WAIT_PRESSED_RIGH 19
-#define WAIT_SREIAL_STOP 20
-
-#define SIZE_OF_WAIT 25 // 消抖数组大小，要大于上面那些数
-
 typedef PACKED_STRUCT()
 {
     struct

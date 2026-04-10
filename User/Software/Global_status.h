@@ -27,11 +27,6 @@ typedef struct
     /*云台状态*/
     struct
     {
-        enum gimbal_mode_e
-        {
-            NORMAL, // 普通模式
-            AUTO,   // 自瞄模式
-        } mode;
         struct
         {
             float pitch;
@@ -48,22 +43,22 @@ typedef struct
             rush,
             outpost,
             base,
-            smallPitch_target_num,//small_pitch_target这个枚举内成员的数量（把他放到最后一个，就表示这个枚举内成员的数量）
+            smallPitch_target_num,
         } small_pitch_target;
 
         float pitch_offset;
-        float small_pitch_offset;//射速误差
+        float small_pitch_offset;
         float Hanging_Shot_err;
         enum pitch_lock_e
         {
-            Pitch_move, // pitch动
-            Pitch_lock,   // pitch锁死
+            Pitch_move,
+            Pitch_lock,
         } pitch_lock;  
 
         enum yaw_lock_e
         {
-            Yay_move, // pitch动
-            Yaw_lock,   // pitch锁死
+            Yay_move,
+            Yaw_lock,
         } yaw_lock; 
 
     } Gimbal;
@@ -127,6 +122,8 @@ typedef struct
             NOK,
             OK,
         } shoot_status;
+        uint8_t mcu_fire_permit;              // 自瞄路径发射准入 (Auto_control.c 写)
+        enum tigger_mode_e manual_tigger_mode; // 纯手动档下想打什么档位 (remote_control.c 写)
     } Shoot;
     /*自瞄状态*/
     struct
@@ -134,20 +131,17 @@ typedef struct
         enum auto_mode_e
         {
             NONE,       // 不启用自瞄
-            CAR,        // 车
-            OUTPOST,    // 前哨站
-            LOWTARGET,  // 小符
-            HIGHTARGET, // 大符
+            CAR,        // 自瞄跟踪
         } mode;
         struct
         {
-            float shoot_yaw;
-            float shoot_pitch;
-            float yaw_ff;            // yaw速度前馈 (rad/s)
-            float pitch_ff;          // pitch速度前馈 (rad/s)
-            int Auto_control_online; // 自瞄在线
-            int8_t fire;             // -1:自瞄在线但未发现目标，0：发现目标，1：允许开火
-            uint8_t target_id;       // 目标ID
+            float shoot_yaw;             // 目标yaw (rad, 世界坐标系绝对值)
+            float shoot_pitch;           // 目标pitch (rad, 世界坐标系绝对值)
+            float yaw_ff;                // yaw速度前馈 (rad/s)
+            float pitch_ff;              // pitch速度前馈 (rad/s)
+            float yaw_acc_ff;            // yaw加速度前馈 (rad/s?)
+            float pitch_acc_ff;          // pitch加速度前馈 (rad/s?)
+            uint8_t target_id;           // 目标ID
         } input;
     } Auto;
     /*电容状态*/
@@ -164,8 +158,7 @@ typedef struct
     {
         enum control_mode_e
         {
-            RC,   // 遥控器
-            KEY,  // 键鼠
+            RC,   // 运行
             LOCK, // 锁死
         } mode;
     } Control;

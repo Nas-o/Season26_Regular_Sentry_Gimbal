@@ -1,8 +1,8 @@
 /*
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-02-09 18:53:37
- * @FilePath: \Regular_Sentry_Gimbal\User\BSP\USB_VirCom.c
+ * @LastEditTime: 2026-04-08 05:14:49
+ * @FilePath: \Season26_Regular_Sentry_Gimbal\User\BSP\USB_VirCom.c
  */
 /**
  * @file USB_VirCom.c
@@ -22,6 +22,12 @@
 
 #include "Global_status.h"
 #include "Auto_control.h"
+#include "stm32h7xx_hal.h"
+
+/* shadow 变量定义在 Auto_control.c，这里声明外部引用 */
+extern volatile MINIPC_data_t  fromMINIPC_shadow;
+extern volatile uint32_t       minipc_last_rx_tick;
+extern volatile uint32_t       minipc_rx_seq;
 
 
 
@@ -36,6 +42,12 @@ void Vircom_Send(uint8_t data[], uint16_t len)
   CDC_Transmit_HS(data, len);
 }
 
+/**
+ * @brief 使用 Shadow将异步的硬件数据接收与同步的软件控制周期解耦
+ * 
+ * @param data 
+ * @param len 
+ */
 void Vircom_Rev(uint8_t data[], uint16_t len)
 {
 /*   if(data[0]==0xff)
@@ -53,10 +65,21 @@ void Vircom_Rev(uint8_t data[], uint16_t len)
     } */
    if(data[0] == 'S' && data[1] == 'P')
    {
-      decodeMINIPCdata(&fromMINIPC,data,len);
-      MINIPC_to_STM32();
-      Global.Auto.input.Auto_control_online = 20; // 更新在线状态
+      // 长度校验
+      if (len != sizeof(MINIPC_data_t))
+          return;
       
+      // CRC16校验 (对 crc16 字段之前的所有字节)
+      MINIPC_data_t *pkt = (MINIPC_data_t *)data;
+      int crc_len = (uint8_t *)&pkt->crc16 - (uint8_t *)pkt;
+      uint16_t calc_crc = get_CRC16_check_sum(data, crc_len, 0xFFFF);
+      if (calc_crc != pkt->crc16)
+          return;
+      
+      // 仅写 shadow + 时间戳 + 序列号，ISR 不再触碰任何运行态控制变量
+      decodeMINIPCdata((MINIPC_data_t *)&fromMINIPC_shadow, data, len);
+      minipc_last_rx_tick = HAL_GetTick();   //配合时间戳做“掉线保护”
+      minipc_rx_seq++;
    }
 }
 

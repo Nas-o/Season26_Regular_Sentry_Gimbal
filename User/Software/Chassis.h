@@ -2,8 +2,8 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-13 00:59:36
- * @FilePath: \Regular_Sentry_Gimbal\User\Software\Chassis.h
+ * @LastEditTime: 2026-04-08 05:13:24
+ * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.h
  */
 
 /*
@@ -32,7 +32,7 @@
 
 #include "motor.h"
 
-
+#define FOLLOW_LPF_ALPHA 0.15f   // 越小滤波越强，0.1~0.3 之间调
 /*电机配置*/
 
 #define CHASSISMotor_init(type, id)  DJIMotor_Init(type ,id)
@@ -192,7 +192,7 @@ typedef struct
     {
         int refresh_interval;
         int smaller_than_2_count;
-        int valve;
+        float valve;
     }random;
 
     pid_t chassis_follow_pid;
@@ -213,12 +213,10 @@ void Chassis_SetX(float x);
 void Chassis_SetY(float y);
 void Chassis_SetR(float r);
 void Chassis_SetAccel(float acc);
-void Rudder_Angle_Calculation(float x, float y, float w);
-void Nearby_Transposition();
-void Chassis_Calculater(float vx,float vy,float vw);
 void Mode_Switch();
 float Random_Spin(float min, float max);
 float Generate_Random_Float(float min, float max);
+float Variable_Spin_Update(void);
 void Chassis_PowerLimit_Update(float max_power);
 #define CHASSIS_TASK_TIME 1 // 底盘任务刷新间隔
 

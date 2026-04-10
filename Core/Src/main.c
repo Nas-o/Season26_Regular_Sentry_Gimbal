@@ -97,8 +97,7 @@ uint32_t fdcan_freq;
   * * @retval int
   */
 int main(void)
-
-  {
+{
   /* USER CODE BEGIN 1 */
 
 

@@ -4,6 +4,7 @@
 #include "Gimbal.h"
 #include "ramp_generator.h"
 #include "referee_system.h"
+#include "Auto_control.h"
 
 #include "DT7.h"
 #include "VT13.h"
@@ -17,40 +18,6 @@
 #include "cmsis_os2.h"
 
 #define SHOOT_MODE_DEBOUNCE_TICKS 10
-
-
-/*----------------------------------- 按键消抖 --------------------------------------*/
-
-int16_t wait_time[SIZE_OF_WAIT] = {0}; // 键盘消抖用时间
-
-/**
- * @brief 统一消抖
- *
- * @param key 按键宏
- * @return uint8_t 0未到时间，1到时间
- */
-uint8_t Wait(uint8_t key)
-{
-    if (wait_time[key] >= 2)
-    {
-        wait_time[key]--;
-        return 0;
-    }
-    else if ((wait_time[key] == 0) || (wait_time[key] == 1))
-    {
-        wait_time[key]--;
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-void SetWait(uint8_t key)
-{
-    wait_time[key] = 300;
-}
 
 
 /*----------------------------------- 遥控数据更新 --------------------------------------*/
@@ -219,14 +186,18 @@ void RC_Controller()
     if (RC_data.online >= 0)
         RC_data.online--;
     /*控制模式选择*/
-    if ((RC_data.rc.s[0]==RC_SW_DOWN && RC_data.rc.s[1]==RC_SW_DOWN) || (RC_data.online <= 0)) // 左下右下，锁死
+    if ((RC_data.rc.s[0]==RC_SW_DOWN && RC_data.rc.s[1]==RC_SW_DOWN) || (RC_data.online <= 0)) // 左下右下 或 离线，锁死
         Global.Control.mode = LOCK;
-    else if (RC_data.rc.s[0]==RC_SW_UP && RC_data.rc.s[1]==RC_SW_UP) // 左上右上，键盘控制
-        Global.Control.mode = KEY;
     else
         Global.Control.mode = RC;
     if (Global.Control.mode == LOCK)
+    {
+        Global.Auto.mode = NONE;
+        Global.Chassis.mode = FLOW_Chassis;
+        Global.Shoot.shoot_mode = CLOSE;
+        Global.Shoot.manual_tigger_mode = TRIGGER_CLOSE;
         return;
+    }
     /*底盘控制*/
 
     if (RC_data.rc.s[0]==RC_SW_UP && RC_data.rc.s[1]==RC_SW_MID) // 左中右上，正小陀螺
@@ -242,7 +213,7 @@ void RC_Controller()
     Chassis_SetX(RC_data.rc.ch[0] / 40.0f);
     Chassis_SetY(RC_data.rc.ch[1] / 40.0f);
     /*云台控制*/
-    if ((Global.Auto.input.Auto_control_online <= 0 || Global.Auto.mode == NONE || Global.Auto.input.fire == -1) && Global.Gimbal.mode == NORMAL)
+    if (!AutoAim_IsControllingGimbal())
     {
         Gimbal_SetPitchAngle(Global.Gimbal.input.pitch + RC_data.rc.ch[3] / 2000.0f);
         Gimbal_SetYawAngle(Global.Gimbal.input.yaw - RC_data.rc.ch[2] / 2000.0f);
@@ -275,79 +246,24 @@ void RC_Controller()
     {
         Global.Shoot.shoot_mode = desired_shoot_mode;
     }
-    /* if (RC_data.rc.ch[4] >= 300 &&
-        RC_data.rc.ch[4] <= 660 &&
-        Global.Shoot.shoot_mode != CLOSE &&
-        (Global.Auto.mode == NONE ||
-         Global.Auto.input.fire == 1 && RC_data.rc.s[0]==RC_SW_UP)) // 滚轮最下头，高速发弹，若自瞄打开，发弹标志位置1允许发弹
-        Global.Shoot.tigger_mode = ONLY_AIM_HIGH;
-    else if (RC_data.rc.ch[4] >= 300 &&
-        RC_data.rc.ch[4] <= 660 &&
-        Global.Shoot.shoot_mode != CLOSE &&
-        (Global.Auto.mode == NONE ||
-         Global.Auto.input.fire == 1 && RC_data.rc.s[0]==RC_SW_MID))
-    {
-        Global.Shoot.tigger_mode = ONLY_AIM_MID;
-    }
-    else if (RC_data.rc.ch[4] >= 300 &&
-        RC_data.rc.ch[4] <= 660 &&
-        Global.Shoot.shoot_mode != CLOSE &&
-        (Global.Auto.mode == NONE ||
-         Global.Auto.input.fire == 1 && RC_data.rc.s[0]==RC_SW_DOWN))
-         {
-            Global.Shoot.tigger_mode = ONLY_AIM_LOW;
-         } */
-        if (Global.Shoot.shoot_mode != CLOSE &&
-        ((Global.Auto.mode == NONE ||
-         Global.Auto.input.fire == 1) || (RC_data.rc.ch[4] >= 300 &&
-        RC_data.rc.ch[4] <= 660)) && RC_data.rc.s[0]==RC_SW_UP) // 滚轮最下头，高速发弹，若自瞄打开，发弹标志位置1允许发弹
-        Global.Shoot.tigger_mode = ONLY_AIM_HIGH;
-    else if (
-        Global.Shoot.shoot_mode != CLOSE &&
-        ((Global.Auto.mode == NONE ||
-         Global.Auto.input.fire == 1) || (RC_data.rc.ch[4] >= 300 &&
-        RC_data.rc.ch[4] <= 660)) && RC_data.rc.s[0]==RC_SW_MID)
-    {
-        Global.Shoot.tigger_mode = TRIGGER_CLOSE;
-    }
-    else if (
-        Global.Shoot.shoot_mode != CLOSE &&
-        ((Global.Auto.mode == NONE ||
-         Global.Auto.input.fire == 1) || (RC_data.rc.ch[4] >= 300 &&
-        RC_data.rc.ch[4] <= 660)) && RC_data.rc.s[0]==RC_SW_DOWN)
-         {
-            Global.Shoot.tigger_mode = TRIGGER_CLOSE;
-         }
-    else if (RC_data.rc.ch[4] >= -660 &&
-             RC_data.rc.ch[4] <= -330 &&
-             Global.Shoot.shoot_mode != CLOSE)
-             Global.Shoot.tigger_mode = SINGLE;
 
-/*     else if (RC_data.rc.ch[4] >= 50 &&
-             RC_data.rc.ch[4] <= 300 &&
-             Global.Shoot.shoot_mode != CLOSE &&
-             (Global.Auto.mode == NONE ||
-              Global.Auto.input.fire == 1)) // 滚轮中部，低速发弹,若自瞄打开，发弹标志位置1允许发弹
-        Global.Shoot.tigger_mode = LOW;
-    else if (RC_data.rc.ch[4] > 660 &&
-             Global.Shoot.shoot_mode != CLOSE)
+    /* ---- 手动射击档位: 只在手动模式下由滚轮决定 ---- */
+    if (Global.Shoot.shoot_mode == CLOSE || Global.Auto.mode != NONE)
     {
-        Global.Shoot.shoot_mode = DEBUG_SHOOT;
-        Global.Shoot.tigger_mode = DEBUG_SHOOT;
-    } */
+        /* 摩擦轮关 或 自瞄已开: 手动档无意义 */
+        Global.Shoot.manual_tigger_mode = TRIGGER_CLOSE;
+    }
     else
-        Global.Shoot.tigger_mode = TRIGGER_CLOSE;
+    {
+        /* 纯手动: 根据滚轮位置 */
+        if (RC_data.rc.ch[4] >= 300 && RC_data.rc.ch[4] <= 660 && RC_data.rc.s[0] == RC_SW_UP)
+            Global.Shoot.manual_tigger_mode = ONLY_AIM_HIGH;
+        else if (RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330)
+            Global.Shoot.manual_tigger_mode = SINGLE;
+        else
+            Global.Shoot.manual_tigger_mode = TRIGGER_CLOSE;
+    }
 }
-
-/*----------------------------------- 键鼠控制逻辑 --------------------------------------*/
-/**
- * @brief 遥控器控制
- *
- */
-void Keyboard_MouseController(void)
-{
-}
-
 
 /*------------------------------------ Task -------------------------------------*/
 
@@ -362,6 +278,4 @@ void Remote_Tasks(void)
 	RCdata_Updater();
     // 遥控器控制
     RC_Controller();
-    // 键鼠控制
-    Keyboard_MouseController();
 }
