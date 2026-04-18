@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-10 11:53:04
+ * @LastEditTime: 2026-04-15 03:47:27
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -38,6 +38,20 @@ AutoAim_t AA;
 uint32_t aa_rx_timeout_ms    = 100;   // 链路新鲜度: 超时则不信任任何帧 (必须保留)
 float aa_yaw_reject_deg      = 60.0f; // 执行安全: 目标yaw与IMU差值超过此阈值 → 拒绝该帧
 float aa_yaw_ff_max_deg_s    = 80.0f; // 执行安全: yaw前馈速度限幅 (deg/s)
+volatile uint32_t relative_timeout_ms = 8;
+volatile uint32_t relative_tick = 0;
+volatile uint32_t relative_lost = 0;
+volatile uint8_t  relative_seq = 0;
+
+uint8_t RelativeAngle_IsFresh(void)
+{
+    if (relative_tick == 0)
+    {
+        return 0;
+    }
+
+    return (HAL_GetTick() - relative_tick <= relative_timeout_ms);
+}
 float aa_scan_yaw_limit_deg  = 60.0f; // 扫描yaw幅度 (deg)
 float aa_scan_yaw_step_deg   = 0.12f; // 扫描yaw步长 (deg/tick)
 float aa_scan_pitch_step_deg = 0.15f; // 扫描pitch步长 (deg/tick)
@@ -117,7 +131,27 @@ static void Receive_RefereeData3(uint8_t data[8])
 
 static void Receive_RelativeAngle(uint8_t data[8])
 {
+    uint32_t last_tick = relative_tick;
+    uint8_t use_seq = (data[5] == 0xA5u && data[6] == 0x5Au);
+
     relative_angle = bytes_to_float(&data[0]);
+    relative_tick = HAL_GetTick();
+
+    if (use_seq)
+    {
+        uint8_t new_seq = bytes_to_uint8(&data[4]);
+
+        if (last_tick != 0)
+        {
+            uint8_t step = (uint8_t)(new_seq - relative_seq);
+            if (step > 1)
+            {
+                relative_lost += (uint32_t)(step - 1);
+            }
+        }
+
+        relative_seq = new_seq;
+    }
 }
 
 static const CanRxEntry_t GimbalRxTable[] = {
@@ -443,7 +477,7 @@ static void Planner_Update(void)
         AA.is_scanning = 0;
     } else if (AA.reacquire_freeze) {
         AA.state = AIM_REACQUIRE;
-        AA.is_scanning = 0;
+            AA.is_scanning = 0;
         /* reacquire 拍: 不调 Auto_Control(), setpoint 保持当前位置 */
     } else if (AA.control_req) {
         AA.state = AIM_TRACK;
@@ -452,7 +486,7 @@ static void Planner_Update(void)
     } else {
         AA.state = AIM_SCAN;
         if (!AA.is_scanning)
-            Scan_Reset_Internal();
+        Scan_Reset_Internal();
         Scan_Internal();
         AA.is_scanning = 1;
     }
@@ -462,7 +496,7 @@ static void Planner_Update(void)
 }
 
 /**
- * @brief 自瞄路径: 只算 mcu_fire_permit, 不碰 tigger_mode
+ * @brief 自瞄路径: 只算 mcu_fire_permit, 不碰 trigger_mode
  * 
  */
 static void FireGate_Update(void)
@@ -522,7 +556,7 @@ void AutoAim_SendDebug(void)
     /* JustFloat: 12 float + 尾标
      * [0] Auto.mode  [1] mode_raw  [2] rx_fresh  [3] state
      * [4] yaw_target [5] yaw_cmd   [6] yaw_now   [7] yaw_ff
-     * [8] shoot_mode [9] shoot_status [10] mcu_fire_permit [11] tigger_mode
+     * [8] shoot_mode [9] shoot_status [10] mcu_fire_permit [11] trigger_mode
      */
     float dbg_buf[12];
     dbg_buf[0]  = (float)Global.Auto.mode;
@@ -536,7 +570,7 @@ void AutoAim_SendDebug(void)
     dbg_buf[8]  = (float)Global.Shoot.shoot_mode;
     dbg_buf[9]  = (float)Global.Shoot.shoot_status;
     dbg_buf[10] = (float)Global.Shoot.mcu_fire_permit;
-    dbg_buf[11] = (float)Global.Shoot.tigger_mode;
+    dbg_buf[11] = (float)Global.Shoot.trigger_mode;
 
     static uint8_t buf[12 * 4 + 4];
     memcpy(buf, dbg_buf, sizeof(dbg_buf));

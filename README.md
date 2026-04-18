@@ -104,8 +104,8 @@ flowchart LR
             R10["Auto.mode = NONE"]:::remote
             R11["select shoot_mode<br/>CLOSE / READY"]:::remote
             R12{"manual mode ?"}:::decision
-            R13["set manual_tigger_mode"]:::remote
-            R14["manual_tigger_mode = TRIGGER_CLOSE"]:::remote
+            R13["set manual_trigger_mode"]:::remote
+            R14["manual_trigger_mode = TRIGGER_CLOSE"]:::remote
 
             R1 --> R2 --> R3
             R3 -- yes --> R4
@@ -190,12 +190,12 @@ flowchart LR
             S2{"READY and wheels near target ?"}:::decision
             S3["shoot_status = OK"]:::shoot
             S4["shoot_status = NOK"]:::shoot
-            S5["Shoot_SelectTriggerMode()<br/>only writer of tigger_mode"]:::shoot
+            S5["Shoot_SelectTriggerMode()<br/>only writer of trigger_mode"]:::shoot
             S6{"LOCK or shoot_mode == CLOSE ?"}:::decision
             S7["TRIGGER_CLOSE"]:::shoot
             S8{"auto-aim mode ?"}:::decision
             S9["auto path<br/>mcu_fire_permit ? ONLY_AIM_HIGH : TRIGGER_CLOSE"]:::shoot
-            S10["manual path<br/>shoot_status == OK ? manual_tigger_mode : TRIGGER_CLOSE"]:::shoot
+            S10["manual path<br/>shoot_status == OK ? manual_trigger_mode : TRIGGER_CLOSE"]:::shoot
 
             S0 --> S1 --> S2
             S2 -- yes --> S3 --> S5
@@ -211,7 +211,7 @@ flowchart LR
             direction TB
             C0["Chassis_Tasks() @ 1 kHz"]:::chassis
             C1["Pack_R_Yaw()<br/>big-yaw follows small-yaw when AutoAim is active"]:::chassis
-            C2["Pack_TRIGGER_MODE()<br/>pack tigger_mode"]:::chassis
+            C2["Pack_TRIGGER_MODE()<br/>pack trigger_mode"]:::chassis
             C3["CAN_ID_SHOOT_TRIGGER_MODE<br/>send at 200 Hz"]:::chassis
             C4["chassis board executes feeding"]:::chassis
 
@@ -225,14 +225,14 @@ flowchart LR
     R9 -->|auto mode| A13
     R10 -->|manual mode| A13
     R11 -->|shoot_mode| S1
-    R13 -->|manual_tigger_mode| S5
-    R14 -->|manual_tigger_mode| S5
+    R13 -->|manual_trigger_mode| S5
+    R14 -->|manual_trigger_mode| S5
 
     A24 -->|gimbal control| G0
     S1 -->|shoot_status| A21
     A22 -->|mcu_fire_permit| S5
     A24 -->|AA.state| C1
-    S5 -->|tigger_mode| C2
+    S5 -->|trigger_mode| C2
 
     style SYS fill:#F6F8FA,stroke:#D0D7DE,stroke-width:1.6px,color:#24292F
     style USB fill:#FFFFFF,stroke:#D0D7DE,stroke-width:1.2px,color:#24292F

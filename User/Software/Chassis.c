@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-07 17:33:29
+ * @LastEditTime: 2026-04-18 18:42:56
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -23,6 +23,7 @@
 */
 #include "math.h"
 #include "stdlib.h"
+#include "string.h"
 
 #include "Auto_control.h"
 #include "Chassis.h"
@@ -52,6 +53,83 @@ static uint8_t nav_offline_dash_active = 0;
 static uint8_t nav_offline_dash_finished = 0;
 static float nav_offline_dash_start_s = 0.0f;
 
+#define NAV_ALIGN_STATE                 5U
+#define NAV_ALIGN_STOP_EPS_DEG          2.0f
+#define CHASSIS_STARTUP_YAW_DELAY_TICK  20U
+
+static uint8_t nav_body_yaw_ready = 0;
+static float nav_body_yaw_zero_deg = 0.0f;
+static float nav_relative_last_deg = 0.0f;
+static float nav_relative_cont_deg = 0.0f;
+static pid_t nav_heading_pid;
+
+static float Navigation_Angle_NormalizeDeg(float angle_deg)
+{
+    while (angle_deg > 180.0f)
+    {
+        angle_deg -= 360.0f;
+    }
+
+    while (angle_deg < -180.0f)
+    {
+        angle_deg += 360.0f;
+    }
+
+    return angle_deg;
+}
+
+static float Chassis_BodyYaw_Update(void)
+{
+    float relative_now_deg = RelativeAngle_IsFresh() ? relative_angle : Chassis.relative_angle;
+
+    if (!nav_body_yaw_ready)
+    {
+        if (imu_chassis.request_cnt < CHASSIS_STARTUP_YAW_DELAY_TICK)
+        {
+            return 0.0f;
+        }
+
+        nav_relative_last_deg = relative_now_deg;
+        nav_relative_cont_deg = relative_now_deg;
+        nav_body_yaw_zero_deg = imu_chassis.yaw_cnt - nav_relative_cont_deg;
+        nav_body_yaw_ready = 1;
+    }
+    else
+    {
+        nav_relative_cont_deg += Navigation_Angle_NormalizeDeg(relative_now_deg - nav_relative_last_deg);
+        nav_relative_last_deg = relative_now_deg;
+    }
+
+    return (imu_chassis.yaw_cnt - nav_relative_cont_deg);
+}
+
+static void Navigation_HeadingHold_Reset(void)
+{
+    PID_Reset(&nav_heading_pid);
+}
+
+static float Navigation_HeadingHold_Update(void)
+{
+    float chassis_body_yaw_deg = Chassis_BodyYaw_Update();
+    float yaw_err_deg;
+
+    if (!nav_body_yaw_ready)
+    {
+        return 0.0f;
+    }
+
+    yaw_err_deg = Navigation_Angle_NormalizeDeg(nav_body_yaw_zero_deg - chassis_body_yaw_deg);
+    if (fabsf(yaw_err_deg) <= NAV_ALIGN_STOP_EPS_DEG)
+    {
+        PID_Reset(&nav_heading_pid);
+        return 0.0f;
+    }
+
+    return PID_Cal(&nav_heading_pid, 0.0f, yaw_err_deg) * RPM_TO_RAD_S;
+}
+
+
+
 
 /*-------------------- Init --------------------*/
 
@@ -64,7 +142,8 @@ void Chassis_Init()
 {
 
     /*底盘跟随PID*/
-    PID_Set(&Chassis.chassis_follow_pid, 0.65f, 0.0f, 0.0f, 0.0f, 120, 40);
+    PID_Set(&Chassis.chassis_follow_pid, 0.60f, 0.0f, 0.0f, 0.0f, 120, 40);
+    PID_Set(&nav_heading_pid, 0.65f, 0.0f, 0.0f, 0.0f, 120, 40);
     /*底盘功率控制pid*/
 
 
@@ -189,7 +268,7 @@ float Generate_Random_Float(float min, float max)
  *         每次 tick (1ms) 调用，返回平滑后的角速度 (rad/s)
  *
  *         原理：
- *         1) 转速分为 LOW [50,80] RPM 和 HIGH [120,170] RPM
+ *         1) 转速分为 LOW [55,70] RPM 和 HIGH [90,110] RPM
  *         2) 到达目标后随机保持 300-800ms，再切换至对侧速段
  *         3) RampGenerator 做加/减速平滑，避免瞬间突变
  *         4) 交替策略保证最小速差 >= 40 RPM (≈4.2 rad/s)，变速肉眼可见
@@ -253,10 +332,11 @@ float X_speed, Y_speed, R_speed;
 void Mode_Switch()
 {
     float sin_beta, cos_beta;
-    /* ---- 跟随连续角状态 ---- */
-    static float last_raw_angle = 0.0f;       // 上一拍归一化角度
-    static float relative_angle_cnt = 0.0f;   // 解缠后的连续角
-    static uint8_t prev_mode_follow = FLOW_Chassis;
+    uint8_t relative_ok;
+
+    Chassis_BodyYaw_Update();
+    relative_ok = RelativeAngle_IsFresh();
+
     /* 1. 根据模式分配输入量与角度策略 */
     switch (Global.Chassis.mode)
     {
@@ -264,6 +344,7 @@ void Mode_Switch()
     case FLOW_Gimbal:
     case SPIN_P:
     case SPIN_N:
+        Navigation_HeadingHold_Reset();
         nav_offline_dash_active = 0;
         nav_offline_dash_finished = 0;
 
@@ -272,91 +353,22 @@ void Mode_Switch()
         Global.Chassis.input.y = (-RC_data.rc.ch[0] / 2.0f * WHEEL_RADIUS) / (30 * Rotation_radius);
 
         /* 计算相对角度 */
-        Chassis.relative_angle = relative_angle;
-        Chassis.relative_angle = Chassis_AngleLimit(Chassis.relative_angle);
+        if (relative_ok)
+        {
+            Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
+        }
 
         /* 各模式下的旋转量处理 */
         if (Global.Chassis.mode == FLOW_Chassis)
         {
             Chassis.relative_angle = 0;
-            /* if (Is_Relative_Angle_Online())
-            { */
-/*             if (fabs(Chassis.relative_angle) > 2.0f)
-            {
-                // 出现180度振荡说明是正反馈，PID输出需要反向
-                Global.Chassis.input.r = -PID_Cal(&Chassis.chassis_follow_pid, Chassis.relative_angle, 0) * RPM_TO_DEG_S; 
-            }
-            else
-            {
-                Global.Chassis.input.r = 0;
-            } */
-            /* }
-            else
-            {
-                // 通信中断时，停止自旋跟随，防止疯转
-                R_speed = 0;
-            } */
              Global.Chassis.input.r =  (-RC_data.rc.ch[2] / 5.0f * WHEEL_RADIUS) / (30 * Rotation_radius);  
         }
         else if (Global.Chassis.mode == FLOW_Gimbal)
         {
-            if (fabs(Chassis.relative_angle) > 5.0f)
-            {
-                // 出现180度振荡说明是正反馈，PID输出需要反向
-                Global.Chassis.input.r = -PID_Cal(&Chassis.chassis_follow_pid, Chassis.relative_angle, 0) * RPM_TO_RAD_S; 
-            }
-            else
-            {
-                Global.Chassis.input.r = 0;
-            }
+            PID_Reset(&Chassis.chassis_follow_pid);
+            Global.Chassis.input.r = 0;
         }
-        // else if (Global.Chassis.mode == FLOW_Gimbal)
-        // {
-        //     /* ---- 切入瞬间：重置状态 ---- */
-        //     if (prev_mode_follow != FLOW_Gimbal)
-        //     {
-        //         last_raw_angle      = Chassis.relative_angle;
-        //         relative_angle_cnt  = Chassis.relative_angle;
-        //     }
-
-        //     /* ---- 角度解缠：增量 + 归一化 ---- */
-        //     float delta = Chassis.relative_angle - last_raw_angle;
-        //     delta = Obtain_Modulus_Normalization(delta, 360.0f);   // → [-180, 180]
-        //     relative_angle_cnt += delta;
-        //     last_raw_angle = Chassis.relative_angle;
-
-        //     /* ---- 外环P + 陀螺仪阻尼 ---- */
-        //     static float kp_follow = 1.0f;
-        //     static float kd_gyro   = 0.5f;
-        //     static float w_max     = 12.0f;
-
-        //     if (fabs(relative_angle_cnt) > 3.0f)
-        //     {
-        //         // 外环：角度误差 → 目标角速度 (rad/s)
-        //         float target_w = kp_follow * relative_angle_cnt * RPM_TO_RAD_S;
-
-        //         // 限幅目标角速度
-        //         if (target_w >  w_max) target_w =  w_max;
-        //         if (target_w < -w_max) target_w = -w_max;
-
-        //         // 阻尼：直接用底盘陀螺仪 yaw 角速度 (rad/s)
-        //         // ★ 注意符号：需确认 input.r > 0 时 gyro[2] 的正负
-        //         //   如果同号 → 用减号（阻尼对抗运动）
-        //         //   如果反号 → 用加号
-        //         Global.Chassis.input.r = target_w - kd_gyro * imu_chassis.gyro[2];
-
-        //         // 总输出限幅
-        //         if (Global.Chassis.input.r >  w_max) Global.Chassis.input.r =  w_max;
-        //         if (Global.Chassis.input.r < -w_max) Global.Chassis.input.r = -w_max;
-        //     }
-        //     else
-        //     {
-        //         // 死区内：不转，同步连续角防漂移
-        //         Global.Chassis.input.r = 0;
-        //         relative_angle_cnt = Chassis.relative_angle;
-        //         last_raw_angle     = Chassis.relative_angle;
-        //     }
-        // }
         else if (Global.Chassis.mode == SPIN_P)
         {
             Global.Chassis.input.r = Variable_Spin_Update();       
@@ -369,7 +381,21 @@ void Mode_Switch()
 
     case Navigation:
 
-        Chassis.relative_angle = relative_angle;
+        if (relative_ok)
+        {
+            Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
+        }
+        if (Navigation_receive_1.running_state == NAV_ALIGN_STATE)
+        {
+            Global.Chassis.input.x = Navigation_receive_1.x_speed;
+            Global.Chassis.input.y = Navigation_receive_1.y_speed;
+            Global.Chassis.input.r = Navigation_HeadingHold_Update();
+            break;
+        }
+        else
+        {
+            Navigation_HeadingHold_Reset();
+        }
 /*         if(Navigation_online != 0 )
         { */
             if (Navigation_receive_1.x_speed != 0 || Navigation_receive_1.y_speed != 0)
@@ -406,106 +432,14 @@ void Mode_Switch()
                         }
                         Last_Hp = Referee.current_HP;
         }
-        
-        
-/*         if (Navigation_online != 0)
-        {
-            nav_offline_dash_active = 0;
-            nav_offline_dash_finished = 0;
-
-            Global.Chassis.input.x = Navigation_receive_1.x_speed * 200.0f;
-            Global.Chassis.input.y = Navigation_receive_1.y_speed * 200.0f;
-            Global.Chassis.input.r = 0;
-        }
-        else
-        {
-            uint8_t in_battle = (Referee_data.game_progress == PROGRESS_BATTLE) ||
-                                (Referee.game_progress == PROGRESS_BATTLE);
-
-            if (in_battle)
-            {
-                if (!nav_offline_dash_active && !nav_offline_dash_finished)
-                {
-                    nav_offline_dash_active = 1;
-                    nav_offline_dash_start_s = Get_SysTime_s();
-                }
-
-                if (nav_offline_dash_active && (Get_SysTime_s() - nav_offline_dash_start_s < 3.0f))
-                {
-                    Chassis.relative_angle = 0.0f;
-                    Global.Chassis.input.x = 200.0f;
-                    Global.Chassis.input.y = 0.0f;
-                    Global.Chassis.input.r = 0.0f;
-                }
-                else
-                {
-                    nav_offline_dash_active = 0;
-                    nav_offline_dash_finished = 1;
-                    Global.Chassis.input.x = 0.0f;
-                    Global.Chassis.input.y = 0.0f;
-                    Global.Chassis.input.r = 0.0f;
-                }
-            }
-            else
-            {
-                nav_offline_dash_active = 0;
-                nav_offline_dash_finished = 0;
-                Global.Chassis.input.x = 0.0f;
-                Global.Chassis.input.y = 0.0f;
-                Global.Chassis.input.r = 0.0f;
-            } */
-
-           /*   if(Referee_data.game_progress == 4)
-                            {
-                                if((Referee_data.remain_hp >= Last_Hp && Get_SysTime_s() - Hp_Time_Wait > 5) || cap.remain_vol < 16)//没受到攻击就转的慢点
-                                {
-                                    R_speed = 60 * RPM_TO_DEG_S;
-                                }
-                                else//检测到掉血就高速或者变速
-                                {
-                                    if(R_speed == 60 * RPM_TO_DEG_S)//Random_Spin(7.5,9.5))
-                                    Hp_Time_Wait = Get_SysTime_s();
-                                    R_speed = Random_Spin(7.5,9.5);
-
-                                }
-                            }
-                        else  
-            
-             Chassis.speed.now_r = R_speed; 
-                        Last_Hp = Referee_data.remain_hp;
-                        Navigation_receive_1.header = 0;
-                        Navigation_receive_1.checksum = 0;
-                        Navigation_receive_1.x_speed  = 0;
-                        Navigation_receive_1.y_speed = 0;
-                        Navigation_receive_1.yaw_speed = 0;
-                        Navigation_receive_1.rotate = 0;
-                        Navigation_receive_1.running_state = 0;  */
-/*         }
-        else
-        {
-            Global.Chassis.input.x = 0.0f;
-            Global.Chassis.input.y = 0.0f;
-            Global.Chassis.input.r = 0.0f;
-        } */
         break;
     }
-    prev_mode_follow = Global.Chassis.mode;
-    /* 2. 统一运动解算 (Vector Decomposition) */
-    sin_beta = sinf(Chassis.relative_angle / 180.0f * PI);
-    cos_beta = cosf(Chassis.relative_angle / 180.0f * PI);
-/*     if(Global.Chassis.mode == SPIN_N || Global.Chassis.mode == SPIN_P)
-    {
-        X_speed = -(Global.Chassis.input.x * cos_beta + sin_beta * Global.Chassis.input.y);
-        Y_speed = -Global.Chassis.input.x * sin_beta + Global.Chassis.input.y * cos_beta;
-    }
-    else
-    {
+        sin_beta = sinf(Chassis.relative_angle / 180.0f * PI);
+        cos_beta = cosf(Chassis.relative_angle / 180.0f * PI);
+
         X_speed = -(Global.Chassis.input.x * cos_beta - sin_beta * Global.Chassis.input.y);
         Y_speed = Global.Chassis.input.x * sin_beta + Global.Chassis.input.y * cos_beta;
-    } */
-    X_speed = -(Global.Chassis.input.x * cos_beta - sin_beta * Global.Chassis.input.y);
-    Y_speed = Global.Chassis.input.x * sin_beta + Global.Chassis.input.y * cos_beta;
-    R_speed = Global.Chassis.input.r;
+        R_speed = Global.Chassis.input.r;
 }
 
 
@@ -614,13 +548,13 @@ static void Pack_Saltation_Mode(uint8_t data[8])
     float_to_bytes(Navigation_receive_1.yaw_speed,      &data[0]);
     uint8_to_bytes(Navigation_receive_1.running_state,  &data[4]); 
     uint8_to_bytes(fromMINIPC.mode,                     &data[5]);
-    uint8_to_bytes(AA.is_scanning,                     &data[6]);
+    uint8_to_bytes(AA.is_scanning,                      &data[6]);
 }
 
 
 static void Pack_TRIGGER_MODE(uint8_t data[8])
 {
-    float_to_bytes(Global.Shoot.tigger_mode,  &data[0]);    
+    float_to_bytes(Global.Shoot.trigger_mode,  &data[0]);    
 }
 
 /*  分频调度表 —— IMU 源 1kHz(TIM13), 全速发送
@@ -642,12 +576,47 @@ static const CanTxEntry_t ChassisTxTable[] = {
 void Chassis_CAN_SendAll(void)
 {
     static uint8_t tick = 0;
+    static enum trigger_mode_e last_trigger_mode = TRIGGER_CLOSE;
+    static enum control_mode_e last_control_mode = RC;
+    static enum chassis_mode_e last_chassis_mode = FLOW_Chassis;
+    static uint8_t trigger_mode_fast_resend = 0;
+    static uint8_t mode_fast_resend = 0;
     uint8_t buf[8];
 
+    if (Global.Shoot.trigger_mode != last_trigger_mode)
+    {
+        last_trigger_mode = Global.Shoot.trigger_mode;
+        trigger_mode_fast_resend = 5; /* 边沿后连续 5ms 以 1kHz 快速重发 */
+    }
+
+    if (Global.Control.mode != last_control_mode || Global.Chassis.mode != last_chassis_mode)
+    {
+        last_control_mode = Global.Control.mode;
+        last_chassis_mode = Global.Chassis.mode;
+        mode_fast_resend = 5; /* 模式边沿与 trigger 一样快速补发 */
+    }
+
     for (uint8_t i = 0; i < sizeof(ChassisTxTable)/sizeof(ChassisTxTable[0]); i++) {
-        if (tick % ChassisTxTable[i].divider == ChassisTxTable[i].phase) {
+        uint8_t should_send = (tick % ChassisTxTable[i].divider == ChassisTxTable[i].phase);
+
+        if (ChassisTxTable[i].id == CAN_ID_SHOOT_TRIGGER_MODE && trigger_mode_fast_resend > 0) {
+            should_send = 1;
+        }
+        if (ChassisTxTable[i].id == CAN_ID_CHASSIS_MODE && mode_fast_resend > 0) {
+            should_send = 1;
+        }
+
+        if (should_send) {
+            memset(buf, 0, sizeof(buf));
             ChassisTxTable[i].pack(buf);
-            Fdcanx_SendData(&hfdcan2, ChassisTxTable[i].id, buf, 8);
+            if (Fdcanx_SendData(&hfdcan2, ChassisTxTable[i].id, buf, 8) == 0) {
+                if (ChassisTxTable[i].id == CAN_ID_SHOOT_TRIGGER_MODE && trigger_mode_fast_resend > 0) {
+                    trigger_mode_fast_resend--;
+                }
+                if (ChassisTxTable[i].id == CAN_ID_CHASSIS_MODE && mode_fast_resend > 0) {
+                    mode_fast_resend--;
+                }
+            }
         }
     }
 

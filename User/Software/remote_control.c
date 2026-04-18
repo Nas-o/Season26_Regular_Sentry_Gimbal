@@ -195,7 +195,7 @@ void RC_Controller()
         Global.Auto.mode = NONE;
         Global.Chassis.mode = FLOW_Chassis;
         Global.Shoot.shoot_mode = CLOSE;
-        Global.Shoot.manual_tigger_mode = TRIGGER_CLOSE;
+        Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
         return;
     }
     /*底盘控制*/
@@ -219,7 +219,7 @@ void RC_Controller()
         Gimbal_SetYawAngle(Global.Gimbal.input.yaw - RC_data.rc.ch[2] / 2000.0f);
     }
     /*自瞄控制*/     
-    if ((RC_data.rc.s[0]==RC_SW_DOWN || RC_data.rc.s[0]==RC_SW_MID || RC_data.rc.s[0]==RC_SW_UP) && RC_data.rc.s[1]==RC_SW_UP) // 右下,左中||左上，自瞄,射击模式
+    if ((/* RC_data.rc.s[0]==RC_SW_DOWN || */ RC_data.rc.s[0]==RC_SW_MID || RC_data.rc.s[0]==RC_SW_UP) && RC_data.rc.s[1]==RC_SW_UP) // 右下,左中||左上，自瞄,射击模式
     {
         Global.Auto.mode = CAR;
     }
@@ -251,17 +251,17 @@ void RC_Controller()
     if (Global.Shoot.shoot_mode == CLOSE || Global.Auto.mode != NONE)
     {
         /* 摩擦轮关 或 自瞄已开: 手动档无意义 */
-        Global.Shoot.manual_tigger_mode = TRIGGER_CLOSE;
+        Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
     }
     else
     {
         /* 纯手动: 根据滚轮位置 */
-        if (RC_data.rc.ch[4] >= 300 && RC_data.rc.ch[4] <= 660 && RC_data.rc.s[0] == RC_SW_UP)
-            Global.Shoot.manual_tigger_mode = ONLY_AIM_HIGH;
+        if (RC_data.rc.ch[4] >= 300 && RC_data.rc.ch[4] <= 660 && (RC_data.rc.s[0] == RC_SW_UP || RC_data.rc.s[0] == RC_SW_MID || RC_data.rc.s[0]==RC_SW_DOWN))
+            Global.Shoot.manual_trigger_mode = ONLY_AIM_HIGH;
         else if (RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330)
-            Global.Shoot.manual_tigger_mode = SINGLE;
+            Global.Shoot.manual_trigger_mode = SINGLE;
         else
-            Global.Shoot.manual_tigger_mode = TRIGGER_CLOSE;
+            Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
     }
 }
 

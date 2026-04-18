@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-10-24 19:37:34
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-08 05:12:08
+ * @LastEditTime: 2026-04-18 14:54:06
  * @FilePath: \Season26_Regular_Sentry_Gimbal\Core\Src\freertos.c
  */
 /* USER CODE BEGIN Header */
@@ -251,8 +251,10 @@ void Remote_control_Task(void *argument)
 void Gimbal_Task(void *argument)
 {
   /* USER CODE BEGIN Gimbal_Task */
+
   osDelay(500);
   Gimbal_Init();
+
   /* Infinite loop */
   for(;;)
   {

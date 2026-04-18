@@ -65,7 +65,7 @@ typedef struct
     /*发射机构状态*/
     struct
     {
-        enum tigger_mode_e
+        enum trigger_mode_e
         {
             TRIGGER_CLOSE,
             HIGH,
@@ -76,7 +76,7 @@ typedef struct
             ONLY_AIM_HIGH,//5hz
             ONLY_AIM_MID,//3hz
             ONLY_AIM_LOW,//1hz
-        } tigger_mode;
+        } trigger_mode;
          struct
         {
             float speed_set;
@@ -123,7 +123,7 @@ typedef struct
             OK,
         } shoot_status;
         uint8_t mcu_fire_permit;              // 自瞄路径发射准入 (Auto_control.c 写)
-        enum tigger_mode_e manual_tigger_mode; // 纯手动档下想打什么档位 (remote_control.c 写)
+        enum trigger_mode_e manual_trigger_mode; // 纯手动档下想打什么档位 (remote_control.c 写)
     } Shoot;
     /*自瞄状态*/
     struct

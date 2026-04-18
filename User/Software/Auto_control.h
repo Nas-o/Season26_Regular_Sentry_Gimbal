@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-06 11:49:28
+ * @LastEditTime: 2026-04-18 12:34:51
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.h
  */
 #ifndef __AUTO_CONTROL_H__
@@ -297,6 +297,7 @@ void MINIPC_SyncShadowToWorkingCopy(void);
 void Navigation_Send_Message(void);
 void decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int len);
 uint8_t Gimbal_CAN_Dispatch(uint16_t id, uint8_t data[8]);
+uint8_t RelativeAngle_IsFresh(void);
 
 /* ---- 自瞄总入口 (freertos.c 每1ms调一次) ---- */
 void AutoAim_Update(void);
@@ -317,6 +318,10 @@ extern int Navigation_online;
 extern Sentry_cmd_t Sentry_cmd_1;
 extern Referee_data_t Referee;
 extern AutoAim_t AA;  // 统一全局状态
+extern volatile uint32_t relative_timeout_ms;
+extern volatile uint32_t relative_tick;
+extern volatile uint32_t relative_lost;
+extern volatile uint8_t  relative_seq;
 
 /* ---- 可调阈值 (定义在 Auto_control.c) ---- */
 extern uint32_t aa_rx_timeout_ms;
@@ -325,3 +330,4 @@ extern float    aa_yaw_ff_max_deg_s;
 
 #define NAV_ONLINE_TIMEOUT_MS 200
 #endif
+

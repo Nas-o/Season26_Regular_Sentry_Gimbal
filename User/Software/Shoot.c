@@ -81,11 +81,16 @@ else {
             break;
         case READY:
             Shoot.shoot_speed_set = SHOOT_SPEED_READY;
-            if ((abs(Shoot.shoot_speed_L_now - SHOOT_SPEED_READY) < 300) &&
-                (abs(Shoot.shoot_speed_R_now - SHOOT_SPEED_READY) < 300)) {
-                Global.Shoot.shoot_status = OK;
-            } else {
-                Global.Shoot.shoot_status = NOK;
+            {
+                const float shoot_speed_l_target = (float)SHOOT_SPEED_READY;
+                const float shoot_speed_r_target = -(float)SHOOT_SPEED_READY;
+
+                if ((fabsf(Shoot.shoot_speed_L_now - shoot_speed_l_target) < 300.0f) &&
+                    (fabsf(Shoot.shoot_speed_R_now - shoot_speed_r_target) < 300.0f)) {
+                    Global.Shoot.shoot_status = OK;
+                } else {
+                    Global.Shoot.shoot_status = NOK;
+                }
             }
             break;
         case DEBUG_SHOOT:
@@ -107,24 +112,24 @@ else {
 /*-------------------- Trigger Arbitrate --------------------*/
 
 /**
- * @brief  全工程唯一写 Global.Shoot.tigger_mode 的地方
- *         两档直通: 自瞄走 mcu_fire_permit, 手动走 manual_tigger_mode
+ * @brief  全工程唯一写 Global.Shoot.trigger_mode 的地方
+ *         两档直通: 自瞄走 mcu_fire_permit, 手动走 manual_trigger_mode
  */
 static void Shoot_SelectTriggerMode(void)
 {
     if (Global.Control.mode == LOCK || Global.Shoot.shoot_mode == CLOSE)
     {
-        Global.Shoot.tigger_mode = TRIGGER_CLOSE;
+        Global.Shoot.trigger_mode = TRIGGER_CLOSE;
     }
     else if (Global.Auto.mode != NONE)
     {
         /* 自瞄档: 上位机说打就打 */
-        Global.Shoot.tigger_mode = Global.Shoot.mcu_fire_permit ? ONLY_AIM_HIGH : TRIGGER_CLOSE;
+        Global.Shoot.trigger_mode = Global.Shoot.mcu_fire_permit ? ONLY_AIM_HIGH : TRIGGER_CLOSE;
     }
     else
     {
         /* 手动档: 操作手说打就打 */
-        Global.Shoot.tigger_mode = (Global.Shoot.shoot_status == OK) ? Global.Shoot.manual_tigger_mode : TRIGGER_CLOSE;
+        Global.Shoot.trigger_mode = (Global.Shoot.shoot_status == OK) ? Global.Shoot.manual_trigger_mode : TRIGGER_CLOSE;
     }
 }
 
@@ -170,7 +175,7 @@ void Shoot_Tasks(void)
 #if (USE_SHOOT != 0)
 	// 发射机构数据更新 (摩擦轮达速检测)
 	Shoot_Updater();
-	// 开火仲裁 (唯一写 tigger_mode 的地方)
+	// 开火仲裁 (唯一写 trigger_mode 的地方)
 	Shoot_SelectTriggerMode();
 	// 发射机构控制计算
 	Shoot_Calculater();
