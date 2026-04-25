@@ -301,7 +301,6 @@ uint8_t RelativeAngle_IsFresh(void);
 
 /* ---- 自瞄总入口 (freertos.c 每1ms调一次) ---- */
 void AutoAim_Update(void);
-void AutoAim_SendDebug(void);
 
 /* ---- 查询接口 (外围模块只用这几个, 不自己拼条件) ---- */
 uint8_t AutoAim_IsControllingGimbal(void);  // 自瞄正在控制云台 (TRACK/REACQUIRE/SCAN)

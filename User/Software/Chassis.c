@@ -53,84 +53,6 @@ static uint8_t nav_offline_dash_active = 0;
 static uint8_t nav_offline_dash_finished = 0;
 static float nav_offline_dash_start_s = 0.0f;
 
-#define NAV_ALIGN_STATE                 5U
-#define NAV_ALIGN_STOP_EPS_DEG          2.0f
-#define CHASSIS_STARTUP_YAW_DELAY_TICK  20U
-
-static uint8_t nav_body_yaw_ready = 0;
-static float nav_body_yaw_zero_deg = 0.0f;
-static float nav_relative_last_deg = 0.0f;
-static float nav_relative_cont_deg = 0.0f;
-static pid_t nav_heading_pid;
-
-static float Navigation_Angle_NormalizeDeg(float angle_deg)
-{
-    while (angle_deg > 180.0f)
-    {
-        angle_deg -= 360.0f;
-    }
-
-    while (angle_deg < -180.0f)
-    {
-        angle_deg += 360.0f;
-    }
-
-    return angle_deg;
-}
-
-static float Chassis_BodyYaw_Update(void)
-{
-    float relative_now_deg = RelativeAngle_IsFresh() ? relative_angle : Chassis.relative_angle;
-
-    if (!nav_body_yaw_ready)
-    {
-        if (imu_chassis.request_cnt < CHASSIS_STARTUP_YAW_DELAY_TICK)
-        {
-            return 0.0f;
-        }
-
-        nav_relative_last_deg = relative_now_deg;
-        nav_relative_cont_deg = relative_now_deg;
-        nav_body_yaw_zero_deg = imu_chassis.yaw_cnt - nav_relative_cont_deg;
-        nav_body_yaw_ready = 1;
-    }
-    else
-    {
-        nav_relative_cont_deg += Navigation_Angle_NormalizeDeg(relative_now_deg - nav_relative_last_deg);
-        nav_relative_last_deg = relative_now_deg;
-    }
-
-    return (imu_chassis.yaw_cnt - nav_relative_cont_deg);
-}
-
-static void Navigation_HeadingHold_Reset(void)
-{
-    PID_Reset(&nav_heading_pid);
-}
-
-static float Navigation_HeadingHold_Update(void)
-{
-    float chassis_body_yaw_deg = Chassis_BodyYaw_Update();
-    float yaw_err_deg;
-
-    if (!nav_body_yaw_ready)
-    {
-        return 0.0f;
-    }
-
-    yaw_err_deg = Navigation_Angle_NormalizeDeg(nav_body_yaw_zero_deg - chassis_body_yaw_deg);
-    if (fabsf(yaw_err_deg) <= NAV_ALIGN_STOP_EPS_DEG)
-    {
-        PID_Reset(&nav_heading_pid);
-        return 0.0f;
-    }
-
-    return PID_Cal(&nav_heading_pid, 0.0f, yaw_err_deg) * RPM_TO_RAD_S;
-}
-
-
-
-
 /*-------------------- Init --------------------*/
 
 /**
@@ -143,7 +65,6 @@ void Chassis_Init()
 
     /*底盘跟随PID*/
     PID_Set(&Chassis.chassis_follow_pid, 0.60f, 0.0f, 0.0f, 0.0f, 120, 40);
-    PID_Set(&nav_heading_pid, 0.65f, 0.0f, 0.0f, 0.0f, 120, 40);
     /*底盘功率控制pid*/
 
 
@@ -332,10 +253,6 @@ float X_speed, Y_speed, R_speed;
 void Mode_Switch()
 {
     float sin_beta, cos_beta;
-    uint8_t relative_ok;
-
-    Chassis_BodyYaw_Update();
-    relative_ok = RelativeAngle_IsFresh();
 
     /* 1. 根据模式分配输入量与角度策略 */
     switch (Global.Chassis.mode)
@@ -344,7 +261,6 @@ void Mode_Switch()
     case FLOW_Gimbal:
     case SPIN_P:
     case SPIN_N:
-        Navigation_HeadingHold_Reset();
         nav_offline_dash_active = 0;
         nav_offline_dash_finished = 0;
 
@@ -353,10 +269,7 @@ void Mode_Switch()
         Global.Chassis.input.y = (-RC_data.rc.ch[0] / 2.0f * WHEEL_RADIUS) / (30 * Rotation_radius);
 
         /* 计算相对角度 */
-        if (relative_ok)
-        {
-            Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
-        }
+        Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
 
         /* 各模式下的旋转量处理 */
         if (Global.Chassis.mode == FLOW_Chassis)
@@ -366,7 +279,6 @@ void Mode_Switch()
         }
         else if (Global.Chassis.mode == FLOW_Gimbal)
         {
-            PID_Reset(&Chassis.chassis_follow_pid);
             Global.Chassis.input.r = 0;
         }
         else if (Global.Chassis.mode == SPIN_P)
@@ -381,21 +293,7 @@ void Mode_Switch()
 
     case Navigation:
 
-        if (relative_ok)
-        {
-            Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
-        }
-        if (Navigation_receive_1.running_state == NAV_ALIGN_STATE)
-        {
-            Global.Chassis.input.x = Navigation_receive_1.x_speed;
-            Global.Chassis.input.y = Navigation_receive_1.y_speed;
-            Global.Chassis.input.r = Navigation_HeadingHold_Update();
-            break;
-        }
-        else
-        {
-            Navigation_HeadingHold_Reset();
-        }
+        Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
 /*         if(Navigation_online != 0 )
         { */
             if (Navigation_receive_1.x_speed != 0 || Navigation_receive_1.y_speed != 0)

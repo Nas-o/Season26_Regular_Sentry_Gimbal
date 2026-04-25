@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-15 03:47:27
+ * @LastEditTime: 2026-04-25 23:47:28
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -34,8 +34,7 @@ Referee_data_t Referee;
 /* ========== 唯一自瞄全局状态 ========== */
 AutoAim_t AA;
 
-/* ========== 可调阈值 (调试器可改, 不用宏) ========== */
-uint32_t aa_rx_timeout_ms    = 100;   // 链路新鲜度: 超时则不信任任何帧 (必须保留)
+uint32_t aa_rx_timeout_ms    = 100;   // 链路新鲜度: 超时则不信任任何帧 
 float aa_yaw_reject_deg      = 60.0f; // 执行安全: 目标yaw与IMU差值超过此阈值 → 拒绝该帧
 float aa_yaw_ff_max_deg_s    = 80.0f; // 执行安全: yaw前馈速度限幅 (deg/s)
 volatile uint32_t relative_timeout_ms = 8;
@@ -53,7 +52,7 @@ uint8_t RelativeAngle_IsFresh(void)
     return (HAL_GetTick() - relative_tick <= relative_timeout_ms);
 }
 float aa_scan_yaw_limit_deg  = 60.0f; // 扫描yaw幅度 (deg)
-float aa_scan_yaw_step_deg   = 0.12f; // 扫描yaw步长 (deg/tick)
+float aa_scan_yaw_speed_deg_s = SCAN_YAW_SPEED; // 扫描yaw速度 (deg/s)
 float aa_scan_pitch_step_deg = 0.15f; // 扫描pitch步长 (deg/tick)
 
 uint8_t Debug_Sentry_Revive_State = 0;
@@ -289,7 +288,6 @@ void STM32_to_MINIPC()
     toMINIPC.q[3] = imu_gimbal.q[3];//IMU_data.AHRS.q[3];
     toMINIPC.bullet_speed = Referee.initial_speed;
     toMINIPC.bullet_count = Referee.launching_frequency;
-    //toMINIPC.crc16 = get_CRC16_check_sum(&toMINIPC.header,41,0xFFFF);
     int len = (uint8_t *)&toMINIPC.crc16 - (uint8_t *)&toMINIPC;
     // 此时调用 CRC，无论结构体怎么变都永远正确
     toMINIPC.crc16 = get_CRC16_check_sum(&toMINIPC.header, len, 0xFFFF);
@@ -331,7 +329,7 @@ static uint8_t AimPacket_IsSane(const MINIPC_data_t *pkt)
 
 void MINIPC_to_STM32(void)
 {
-    /* ---- 链路新鲜度 (唯一保底) ---- */
+    /* ---- 链路新鲜度 ---- */
     uint32_t age = HAL_GetTick() - minipc_last_rx_tick;
     AA.rx_fresh = (minipc_last_rx_tick != 0 && age <= aa_rx_timeout_ms) ? 1 : 0;
 
@@ -396,10 +394,14 @@ static void Scan_Internal(void)
 {
     const float PITCH_MAX = PITCHI_MAX_ANGLE;
     const float PITCH_MIN = PITCHI_MIN_ANGLE;
+    float small_yaw_relative_now = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
 
-    /* 初始同步 (首次进入或 Scan_Reset 后) */
+    /* 初始同步 */
     if (!AA.scan_init_done) {
         AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pitch_location_now);
+        AA.scan_offset = small_yaw_relative_now;
+        Gimbal.small_yaw.turnover_yaw = (small_yaw_relative_now < 0.0f) ? 1 : 0;
+        AA.scan_yaw_dir = (Gimbal.small_yaw.turnover_yaw == 1) ? 1 : -1;
         AA.scan_init_done = 1;
     }
 
@@ -421,21 +423,26 @@ static void Scan_Internal(void)
     Global.Gimbal.input.pitch = AA.scan_pitch_deg;
     Gimbal.pitch.pitch_location_set = degree2rad(AA.scan_pitch_deg);
 
-    /* 小 Yaw 相对大 Yaw 往复扫描 */
-    AA.scan_offset += AA.scan_yaw_dir * aa_scan_yaw_step_deg;
-    if (AA.scan_offset >= aa_scan_yaw_limit_deg)  { AA.scan_offset = aa_scan_yaw_limit_deg;  AA.scan_yaw_dir = -1; }
-    if (AA.scan_offset <= -aa_scan_yaw_limit_deg) { AA.scan_offset = -aa_scan_yaw_limit_deg; AA.scan_yaw_dir =  1; }
+    /* 小Yaw扫描只写速度给定，不污染 yaw 输入链 */
+    if (small_yaw_relative_now >= aa_scan_yaw_limit_deg)
+        Gimbal.small_yaw.turnover_yaw = 0;
+    else if (small_yaw_relative_now <= -aa_scan_yaw_limit_deg)
+        Gimbal.small_yaw.turnover_yaw = 1;
 
-    float encoder_relative = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
-    float big_yaw_world = Gimbal.small_yaw.small_yaw_location_now - encoder_relative;
-    Gimbal.small_yaw.small_yaw_location_set = big_yaw_world + AA.scan_offset;
+    Gimbal.small_yaw.small_yaw_speed_set =
+        (Gimbal.small_yaw.turnover_yaw == 1) ? aa_scan_yaw_speed_deg_s : -aa_scan_yaw_speed_deg_s;
+    AA.scan_yaw_dir = (Gimbal.small_yaw.turnover_yaw == 1) ? 1 : -1;
+    AA.scan_offset = small_yaw_relative_now;
+
 }
 
 static void Scan_Reset_Internal(void)
 {
     AA.scan_init_done = 0;
+    AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pitch_location_now);
     AA.scan_offset    = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
-    AA.scan_yaw_dir   = (AA.scan_offset >= 0) ? -1 : 1;
+    AA.scan_yaw_dir   = 0;
+    Gimbal.small_yaw.small_yaw_speed_set = 0.0f;
 }
 
 /**
@@ -444,25 +451,17 @@ static void Scan_Reset_Internal(void)
  */
 static void EdgeAction_Update(void)
 {
-    /* 上升沿 (0→1/2, 进入 track): 清 PID + 同步 setpoint + 清前馈 */
+    /* 上升沿 (0→1/2, 进入 track): 同步 setpoint */
     if (AA.control_req && !AA.control_req_last) {
         AA.reacquire_freeze = 1;
-        PID_Reset(&Gimbal.small_yaw.small_yaw_auto_location_pid);
-        PID_Reset(&Gimbal.small_yaw.small_yaw_auto_speed_pid);
-        PID_Reset(&Gimbal.small_yaw.small_yaw_location_pid);
-        PID_Reset(&Gimbal.small_yaw.small_yaw_speed_pid);
         Gimbal.small_yaw.small_yaw_location_set = Gimbal.small_yaw.small_yaw_location_now;
         Global.Gimbal.input.yaw = Gimbal.small_yaw.small_yaw_location_now;
         Global.Auto.input.yaw_ff = 0;
         Global.Auto.input.pitch_ff = 0;
     }
 
-    /* 下降沿 (1/2→0, 离开 track): 清 PID + 清前馈, 准备进入扫描 */
+    /* 下降沿 (1/2→0, 离开 track):准备进入扫描 */
     if (!AA.control_req && AA.control_req_last) {
-        PID_Reset(&Gimbal.small_yaw.small_yaw_location_pid);
-        PID_Reset(&Gimbal.small_yaw.small_yaw_speed_pid);
-        PID_Reset(&Gimbal.small_yaw.small_yaw_auto_location_pid);
-        PID_Reset(&Gimbal.small_yaw.small_yaw_auto_speed_pid);
         Global.Auto.input.yaw_ff = 0;
         Global.Auto.input.pitch_ff = 0;
     }
@@ -491,12 +490,12 @@ static void Planner_Update(void)
         AA.is_scanning = 1;
     }
 
-    /* 清除冻结标志 (已在本拍生效) */
+    /* 清除冻结标志 */
     AA.reacquire_freeze = 0;
 }
 
 /**
- * @brief 自瞄路径: 只算 mcu_fire_permit, 不碰 trigger_mode
+ * @brief 自瞄路径
  * 
  */
 static void FireGate_Update(void)
@@ -515,8 +514,17 @@ static void FireGate_Update(void)
 static void DebugFill_Update(void)
 {
     AA.dbg_yaw_target_raw_deg = rad2degree(Global.Auto.input.shoot_yaw);
-    AA.dbg_yaw_cmd_deg        = Global.Gimbal.input.yaw;
-    AA.dbg_yaw_now_deg        = imu_gimbal.yaw_cnt;
+    if (AutoAim_IsScanning())
+    {
+        AA.dbg_yaw_cmd_deg = (Gimbal.small_yaw.turnover_yaw == 1) ? aa_scan_yaw_limit_deg : -aa_scan_yaw_limit_deg;
+        AA.dbg_yaw_now_deg = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+    }
+    else
+    {
+        AA.dbg_yaw_cmd_deg = Global.Gimbal.input.yaw;
+        AA.dbg_yaw_now_deg = imu_gimbal.yaw_cnt;
+    }
+
     AA.dbg_yaw_ff_deg_s       = rad2degree(Global.Auto.input.yaw_ff);
     AA.dbg_encoder_relative   = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     AA.dbg_mcu_fire_permit    = (float)Global.Shoot.mcu_fire_permit;
@@ -535,13 +543,13 @@ void AutoAim_Update(void)
     /* 2. 语义解析 + 链路保底 + 数据锁存 */
     MINIPC_to_STM32();
 
-    /* 3. 边沿动作 (基于 control_req 上下沿) */
+    /* 3. 边沿动作 */
     EdgeAction_Update();
 
     /* 4. 状态决策 + 目标生成 / 扫描 */
     Planner_Update();
 
-    /* 5. 发射许可 (硬件安全) */
+    /* 5. 发射许可 */
     FireGate_Update();
 
     /* 6. 调试量 */
@@ -549,33 +557,6 @@ void AutoAim_Update(void)
 
     /* 7. 保存本拍 control_req 用于下一拍边沿检测 */
     AA.control_req_last = AA.control_req;
-}
-
-void AutoAim_SendDebug(void)
-{
-    /* JustFloat: 12 float + 尾标
-     * [0] Auto.mode  [1] mode_raw  [2] rx_fresh  [3] state
-     * [4] yaw_target [5] yaw_cmd   [6] yaw_now   [7] yaw_ff
-     * [8] shoot_mode [9] shoot_status [10] mcu_fire_permit [11] trigger_mode
-     */
-    float dbg_buf[12];
-    dbg_buf[0]  = (float)Global.Auto.mode;
-    dbg_buf[1]  = (float)AA.mode_raw;
-    dbg_buf[2]  = (float)AA.rx_fresh;
-    dbg_buf[3]  = (float)AA.state;
-    dbg_buf[4]  = AA.dbg_yaw_target_raw_deg;
-    dbg_buf[5]  = AA.dbg_yaw_cmd_deg;
-    dbg_buf[6]  = AA.dbg_yaw_now_deg;
-    dbg_buf[7]  = AA.dbg_yaw_ff_deg_s;
-    dbg_buf[8]  = (float)Global.Shoot.shoot_mode;
-    dbg_buf[9]  = (float)Global.Shoot.shoot_status;
-    dbg_buf[10] = (float)Global.Shoot.mcu_fire_permit;
-    dbg_buf[11] = (float)Global.Shoot.trigger_mode;
-
-    static uint8_t buf[12 * 4 + 4];
-    memcpy(buf, dbg_buf, sizeof(dbg_buf));
-    buf[48] = 0x00; buf[49] = 0x00; buf[50] = 0x80; buf[51] = 0x7F;
-    UART_SendData(UART10_data, buf, sizeof(buf));
 }
 
 /* =====================================================================

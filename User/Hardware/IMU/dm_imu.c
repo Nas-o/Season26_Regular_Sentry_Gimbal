@@ -180,6 +180,7 @@ void IMU_UpdateGyro(uint8_t* pData,imu_t *imu)
 void IMU_UpdateEuler(uint8_t* pData,imu_t *imu)
 {
 	int euler[3];
+	float delta_yaw;
 	
 	euler[0]=pData[3]<<8|pData[2];
 	euler[1]=pData[5]<<8|pData[4];
@@ -188,6 +189,18 @@ void IMU_UpdateEuler(uint8_t* pData,imu_t *imu)
 	imu->pitch=uint_to_float(euler[0],PITCH_CAN_MIN,PITCH_CAN_MAX,16);
 	imu->yaw=uint_to_float(euler[1],YAW_CAN_MIN,YAW_CAN_MAX,16);
 	imu->roll=uint_to_float(euler[2],ROLL_CAN_MIN,ROLL_CAN_MAX,16);
+	
+	delta_yaw = imu->yaw - imu->last_yaw;
+	if(delta_yaw < -180.0f)
+	{
+		delta_yaw += 360.0f;
+	}
+	else if(delta_yaw > 180.0f)
+	{
+		delta_yaw -= 360.0f;
+	}
+	imu->yaw_cnt += delta_yaw;
+	imu->last_yaw = imu->yaw;
 }
 
 
@@ -225,8 +238,6 @@ void IMU_UpdateData(uint8_t* pData, imu_t *imu)
 
 void IMU_MatchData(imu_t *imu)
 {
-    static float delta_yaw = 0;
-    
     imu->request_cnt++;
     
     // --- 优化后的轮询逻辑 ---
@@ -242,18 +253,6 @@ void IMU_MatchData(imu_t *imu)
     {
       imu->request_cnt = 0;
     }
-    delta_yaw = imu->yaw - imu->last_yaw;
-    if(delta_yaw < -180.0f)
-    {
-      delta_yaw += 360.0f;
-    }
-    else if(delta_yaw > 180.0f)
-    {
-      delta_yaw -= 360.0f;
-    }
-    imu->yaw_cnt += delta_yaw;
-    imu->last_yaw = imu->yaw;
-
 }
 
 /**

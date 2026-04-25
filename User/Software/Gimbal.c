@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-14 23:00:28
+ * @LastEditTime: 2026-04-24 16:00:55
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -64,7 +64,7 @@ void Gimbal_Init()
     DJIMotor_Init(DJI_GM6020, SMALLYAWMotor);
     
     /*------MIT模式参数初始化------*/
-    Gimbal.pitch.kp = 18.0f;  // 位置比例增益 
+    Gimbal.pitch.kp = 15.0f;  // 位置比例增益 
     Gimbal.pitch.kd = 1.0f;   // 速度阻尼增益
     Gimbal.pitch.k_gravity = 0.4;//0.891800784f; // 重力前馈系数
     
@@ -141,7 +141,7 @@ void Gimbal_Updater()
     if (AutoAim_IsControllingGimbal())
     {
         /* 自瞄/扫描: setpoint 已由 Auto_control.c 写入 */
-        /* 扫描态: Scan_Internal 直接写 Gimbal.small_yaw.small_yaw_location_set */
+        /* 扫描态: 小yaw不走位置给定，保持 yaw 输入链干净 */
         /* 跟踪态: Auto_Control 通过 Gimbal_SetYawAngle 写 Global.Gimbal.input.yaw */
         if (!AutoAim_IsScanning())
             Gimbal.small_yaw.small_yaw_location_set = Global.Gimbal.input.yaw;
@@ -174,9 +174,16 @@ void Gimbal_Updater()
  */
 void Gimbal_Calculater()
 {
-    if (!AutoAim_IsTracking())
+    if (AutoAim_IsScanning())
     {
-        // 非自瞄 (手动/扫描)
+        /* 扫描态下小yaw直接做速度控制 */
+        Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid,
+                                          Gimbal.small_yaw.small_yaw_speed_now,
+                                          Gimbal.small_yaw.small_yaw_speed_set);
+    }
+    else if (!AutoAim_IsTracking())
+    {
+        // 非跟踪态手动位置控制
         Gimbal.small_yaw.small_yaw_speed_set =  PID_Cal(&Gimbal.small_yaw.small_yaw_location_pid, Gimbal.small_yaw.small_yaw_location_now,Gimbal.small_yaw.small_yaw_location_set);  
         Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set); 
         
@@ -223,8 +230,10 @@ void Gimbal_Controller()
 
     if (Global.Control.mode != LOCK)
    {
-        // 判断小yaw是否需要泄力 (FLOW_Chassis模式下泄力)
-        uint8_t small_yaw_release = (Global.Chassis.mode == FLOW_Chassis && Global.Auto.mode == NONE);
+        // 判断小yaw是否需要泄力 (FLOW_Chassis无自瞄 / FLOW_Gimbal 都泄力)
+        uint8_t small_yaw_release =
+            ((Global.Chassis.mode == FLOW_Chassis && Global.Auto.mode == NONE) ||
+             (Global.Chassis.mode == FLOW_Gimbal));
 
         // 从FLOW_Chassis或FLOW_Gimbal切出的瞬间：同步目标位置为当前位置，防止跳变
         if ((last_chassis_mode == FLOW_Chassis && !small_yaw_release) ||

@@ -2,7 +2,6 @@
 #define __GLOBAL_STATUS_H__
 
 #include "stdint.h"
-#define A_BULLET_ECD -26219
 typedef struct
 {
     /*µ×ÅÌ×´Ì¬*/

@@ -247,15 +247,12 @@ void RC_Controller()
         Global.Shoot.shoot_mode = desired_shoot_mode;
     }
 
-    /* ---- 手动射击档位: 只在手动模式下由滚轮决定 ---- */
     if (Global.Shoot.shoot_mode == CLOSE || Global.Auto.mode != NONE)
     {
-        /* 摩擦轮关 或 自瞄已开: 手动档无意义 */
         Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
     }
     else
     {
-        /* 纯手动: 根据滚轮位置 */
         if (RC_data.rc.ch[4] >= 300 && RC_data.rc.ch[4] <= 660 && (RC_data.rc.s[0] == RC_SW_UP || RC_data.rc.s[0] == RC_SW_MID || RC_data.rc.s[0]==RC_SW_DOWN))
             Global.Shoot.manual_trigger_mode = ONLY_AIM_HIGH;
         else if (RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330)

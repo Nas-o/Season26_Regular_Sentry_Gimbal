@@ -123,12 +123,10 @@ static void Shoot_SelectTriggerMode(void)
     }
     else if (Global.Auto.mode != NONE)
     {
-        /* 自瞄档: 上位机说打就打 */
         Global.Shoot.trigger_mode = Global.Shoot.mcu_fire_permit ? ONLY_AIM_HIGH : TRIGGER_CLOSE;
     }
     else
     {
-        /* 手动档: 操作手说打就打 */
         Global.Shoot.trigger_mode = (Global.Shoot.shoot_status == OK) ? Global.Shoot.manual_trigger_mode : TRIGGER_CLOSE;
     }
 }
