@@ -182,6 +182,8 @@ void RC_Controller()
 {
     static enum shoot_mode_e shoot_mode_candidate = CLOSE;
     static uint8_t shoot_mode_stable_cnt = 0;
+    static uint8_t single_zone_latched = 0;
+    static uint8_t single_cmd_ticks = 0;
 
     if (RC_data.online >= 0)
         RC_data.online--;
@@ -250,15 +252,38 @@ void RC_Controller()
     if (Global.Shoot.shoot_mode == CLOSE || Global.Auto.mode != NONE)
     {
         Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
+        single_zone_latched = 0;
+        single_cmd_ticks = 0;
     }
     else
     {
         if (RC_data.rc.ch[4] >= 300 && RC_data.rc.ch[4] <= 660 && (RC_data.rc.s[0] == RC_SW_UP || RC_data.rc.s[0] == RC_SW_MID || RC_data.rc.s[0]==RC_SW_DOWN))
-            Global.Shoot.manual_trigger_mode = ONLY_AIM_HIGH;
-        else if (RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330)
-            Global.Shoot.manual_trigger_mode = SINGLE;
+            {
+                Global.Shoot.manual_trigger_mode = ONLY_AIM_HIGH;
+                single_zone_latched = 0;
+                single_cmd_ticks = 0;
+            }
         else
-            Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
+        {
+            if ((RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330) && !single_zone_latched)
+            {
+                single_zone_latched = 1;
+                single_cmd_ticks = 10;
+            }
+            else if (!(RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330))
+            {
+                single_zone_latched = 0;
+            }
+            if (single_cmd_ticks > 0)
+            {
+                Global.Shoot.manual_trigger_mode = SINGLE;
+                single_cmd_ticks--;
+            }
+            else
+            {
+                Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
+            }
+        }
     }
 }
 

@@ -19,6 +19,7 @@
 #include "Gimbal.h"
 #include "referee_system.h"
 #include "User_math.h"
+#include "Auto_control.h"
 
 Shoot_t Shoot;
 
@@ -123,7 +124,18 @@ static void Shoot_SelectTriggerMode(void)
     }
     else if (Global.Auto.mode != NONE)
     {
-        Global.Shoot.trigger_mode = Global.Shoot.mcu_fire_permit ? ONLY_AIM_HIGH : TRIGGER_CLOSE;
+        if (!Global.Shoot.mcu_fire_permit)
+        {
+            Global.Shoot.trigger_mode = TRIGGER_CLOSE;
+        }
+        else if (toMINIPC.mode == MODE_SMALL_BUFF || toMINIPC.mode == MODE_BIG_BUFF)
+        {
+            Global.Shoot.trigger_mode = SINGLE;
+        }
+        else
+        {
+            Global.Shoot.trigger_mode = ONLY_AIM_HIGH;
+        }
     }
     else
     {

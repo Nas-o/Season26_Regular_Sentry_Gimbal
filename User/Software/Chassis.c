@@ -406,12 +406,17 @@ static void Pack_XY_Speed(uint8_t data[8])
 
 static void Pack_R_Yaw(uint8_t data[8])
 {
+    /* 原子拷贝 relative_angle，防止 CAN ISR 半写导致的 torn read */
+    __disable_irq();
+    float ra = relative_angle;
+    __enable_irq();
+
     float encoder_relative = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     
     if (AutoAim_ShouldBigYawFollow())
     {
         // 自瞄跟踪 或 扫描: 大 yaw 都跟随小 yaw，避免切扫描时大 yaw 目标突变
-        Gimbal.big_yaw.big_yaw_location_set = relative_angle + encoder_relative;
+        Gimbal.big_yaw.big_yaw_location_set = ra + encoder_relative;
     }
     else
     {

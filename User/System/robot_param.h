@@ -110,7 +110,7 @@
 
 //电机ID
 #define ShootMotor_L  CAN_1_1
-#define ShootMotor_R  CAN_1_6
+#define ShootMotor_R  CAN_1_2
 #define TRIGGER_MOTOR CAN_1_7
 
 //电机种类
