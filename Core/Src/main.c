@@ -94,7 +94,7 @@ uint32_t fdcan_freq;
 
 /**\
   * @brief  The application entry point  .
-  * * @retval int
+  * * @retval intr
   */
 int main(void)
 {

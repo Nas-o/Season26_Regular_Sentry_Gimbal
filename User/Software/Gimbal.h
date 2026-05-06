@@ -70,6 +70,8 @@ typedef struct
     pid_t small_yaw_auto_speed_pid;
     pid_t small_yaw_auto_location_pid;
     float small_yaw_speed_now;
+    float small_yaw_speed_raw;          // 滤波前的原始速度
+    float small_yaw_speed_lpf_alpha;    // 一阶低通滤波系数 (0~1)
     float small_yaw_location_now;
     float small_yaw_speed_set;
     float small_yaw_location_set;

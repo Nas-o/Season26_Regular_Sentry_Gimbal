@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-29 02:02:32
+ * @LastEditTime: 2026-05-03 00:26:39
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -66,7 +66,7 @@ void Gimbal_Init()
     /*------MIT模式参数初始化------*/
     Gimbal.pitch.kp = 18.0f;  // 位置比例增益 
     Gimbal.pitch.kd = 1.8f;   // 速度阻尼增益
-    Gimbal.pitch.k_gravity = 0.4;//0.891800784f; // 重力前馈系数
+    Gimbal.pitch.k_gravity = 0.891800784f; // 重力前馈系数
     
     /*PID速度环初始化*/ 
     // 遥控
@@ -81,6 +81,11 @@ void Gimbal_Init()
     // 自瞄
     PID_Set(&Gimbal.pitch.pitch_auto_location_pid, 16.0f, 0.0f, 10, 0.0f, 12.57, 100);
     PID_Set(&Gimbal.small_yaw.small_yaw_auto_location_pid, 18.0f, 0.0f, 1.0f, 0.0f, 300, 1000);
+
+    // 小yaw速度一阶低通滤波系数 (0~1, 越小滤波越强)
+    Gimbal.small_yaw.small_yaw_speed_lpf_alpha = 0.5f;
+    Gimbal.small_yaw.small_yaw_speed_now = 0.0f;
+    Gimbal.small_yaw.small_yaw_speed_raw = 0.0f;
 
     // 云台零点初始化
     DJIMotor_SetZero(SMALL_YAW_ZERO,SMALLYAWMotor);
@@ -107,7 +112,10 @@ void Gimbal_Updater()
 {
     /*------状态量更新------*/
     //速度                                       
-    Gimbal.small_yaw.small_yaw_speed_now = (cos(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[2]) - sin(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[0]));
+    Gimbal.small_yaw.small_yaw_speed_raw = (cos(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[2]) - sin(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[0]));
+    // 一阶低通滤波: y = alpha * x + (1 - alpha) * y_last
+    Gimbal.small_yaw.small_yaw_speed_now = Gimbal.small_yaw.small_yaw_speed_lpf_alpha * Gimbal.small_yaw.small_yaw_speed_raw
+                                         + (1.0f - Gimbal.small_yaw.small_yaw_speed_lpf_alpha) * Gimbal.small_yaw.small_yaw_speed_now;
     Gimbal.pitch.pitch_speed_now = -imu_gimbal.gyro[1];
     //位置
 
@@ -141,7 +149,7 @@ void Gimbal_Updater()
     if (AutoAim_IsControllingGimbal())
     {
         /* 自瞄/扫描: setpoint 已由 Auto_control.c 写入 */
-        /* 扫描态: 小yaw不走位置给定，保持 yaw 输入链干净 */
+        /* 扫描态: Scan_Internal() 已直接设置 small_yaw_location_set */
         /* 跟踪态: Auto_Control 通过 Gimbal_SetYawAngle 写 Global.Gimbal.input.yaw */
         if (!AutoAim_IsScanning())
             Gimbal.small_yaw.small_yaw_location_set = Global.Gimbal.input.yaw;
@@ -174,14 +182,7 @@ void Gimbal_Updater()
  */
 void Gimbal_Calculater()
 {
-    if (AutoAim_IsScanning())
-    {
-        /* 扫描态下小yaw直接做速度控制 */
-        Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid,
-                                          Gimbal.small_yaw.small_yaw_speed_now,
-                                          Gimbal.small_yaw.small_yaw_speed_set);
-    }
-    else if (!AutoAim_IsTracking())
+    if (!AutoAim_IsTracking())
     {
         // 非跟踪态手动位置控制
         Gimbal.small_yaw.small_yaw_speed_set =  PID_Cal(&Gimbal.small_yaw.small_yaw_location_pid, Gimbal.small_yaw.small_yaw_location_now,Gimbal.small_yaw.small_yaw_location_set);  
@@ -287,7 +288,7 @@ void Gimbal_Controller()
              DMMotor_Set(PITCHMotor, 
                          pitch_target_motor,                // 目标位置 
                          pitch_vel_ff,                      // 目标速度(前馈)
-                         Gimbal.pitch.gravity_compensation,                   // 前馈力矩 (重力模型 + 积分修正)
+                         total_torque_ff,                   // 前馈力矩 (重力模型 + 积分修正)
                          Gimbal.pitch.kp,                   // 位置比例增益
                          Gimbal.pitch.kd);                  // 速度阻尼增益
         }

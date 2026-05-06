@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-18 18:42:56
+ * @LastEditTime: 2026-05-05 16:25:23
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -200,10 +200,10 @@ float Generate_Random_Float(float min, float max)
 float Variable_Spin_Update(void)
 {
     /* ---- 可调参数 (RPM) ---- */
-    #define VSPIN_LOW_MIN_RPM    55.0f     /* 低速段下限 RPM    */
+    #define VSPIN_LOW_MIN_RPM    60.0f     /* 低速段下限 RPM    */
     #define VSPIN_LOW_MAX_RPM    70.0f     /* 低速段上限 RPM    */
     #define VSPIN_HIGH_MIN_RPM   90.0f    /* 高速段下限 RPM    */
-    #define VSPIN_HIGH_MAX_RPM   110.0f    /* 高速段上限 RPM    */
+    #define VSPIN_HIGH_MAX_RPM   105.0f    /* 高速段上限 RPM    */
     #define VSPIN_HOLD_MIN_MS    300       /* 最短保持时间 ms   */
     #define VSPIN_HOLD_MAX_MS    800       /* 最长保持时间 ms   */
 
@@ -316,7 +316,7 @@ void Mode_Switch()
 
                                 if (hurt_high_spin_latched)
                                 {
-                                    Global.Chassis.input.r = 108 * RPM_TO_RAD_S;
+                                    Global.Chassis.input.r = Variable_Spin_Update();
                                 }
                                 else
                                 {
@@ -458,6 +458,7 @@ static void Pack_Saltation_Mode(uint8_t data[8])
 static void Pack_TRIGGER_MODE(uint8_t data[8])
 {
     float_to_bytes(Global.Shoot.trigger_mode,  &data[0]);    
+    float_to_bytes(Global.Auto.mode,           &data[4]);
 }
 
 /*  分频调度表 —— IMU 源 1kHz(TIM13), 全速发送
@@ -482,13 +483,15 @@ void Chassis_CAN_SendAll(void)
     static enum trigger_mode_e last_trigger_mode = TRIGGER_CLOSE;
     static enum control_mode_e last_control_mode = RC;
     static enum chassis_mode_e last_chassis_mode = FLOW_Chassis;
+    static enum auto_mode_e    last_auto_mode    = NONE;
     static uint8_t trigger_mode_fast_resend = 0;
     static uint8_t mode_fast_resend = 0;
     uint8_t buf[8];
 
-    if (Global.Shoot.trigger_mode != last_trigger_mode)
+    if (Global.Shoot.trigger_mode != last_trigger_mode || Global.Auto.mode != last_auto_mode)
     {
         last_trigger_mode = Global.Shoot.trigger_mode;
+        last_auto_mode    = Global.Auto.mode;
         trigger_mode_fast_resend = 5; /* 边沿后连续 5ms 以 1kHz 快速重发 */
     }
 

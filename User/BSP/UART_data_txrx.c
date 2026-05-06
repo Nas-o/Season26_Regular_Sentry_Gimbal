@@ -123,18 +123,18 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   case (uintptr_t)USART1: // 自瞄数据//导航数据
   {
     // 解决粘包和错位问题：遍历缓冲区寻找所有可能的帧头
-    if (Size >= 20)
-    { 
-        for (uint16_t i = 0; i <= Size - 20; i++)
-        {
-            if (UART1_data.rev_data[i] == 0xAA)
-            {
-                // 找到帧头，尝试解析。decodeNAVdata 内部包含 CRC 校验，如果通过则更新数据
-                decodeNAVdata(&Navigation_receive_1, &UART1_data.rev_data[i], 20);
-                Navigation_online = NAV_ONLINE_TIMEOUT_MS;
-            }
-        }
-    }
+    // if (Size >= 20)
+    // { 
+    //     for (uint16_t i = 0; i <= Size - 20; i++)
+    //     {
+    //         if (UART1_data.rev_data[i] == 0xAA)
+    //         {
+    //             // 找到帧头，尝试解析。decodeNAVdata 内部包含 CRC 校验，如果通过则更新数据
+    //             decodeNAVdata(&Navigation_receive_1, &UART1_data.rev_data[i], 20);
+    //             Navigation_online = NAV_ONLINE_TIMEOUT_MS;
+    //         }
+    //     }
+    // }
 /*     if (UART1_data.rev_data[0] == 0xA5) // 帧头校验
     {
       Global.Auto.input.Auto_control_online = 20; // 更新在线状态
@@ -189,14 +189,26 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   case (uintptr_t)UART7: 
   {
    /*  fifo_s_puts(&referee_fifo, (char *)UART7_data.rev_data, (int)Size); */
-    for (uint16_t i = 0; i < Size; i++)
+    // for (uint16_t i = 0; i < Size; i++)
+    //     {
+    //         /*  喂数据给解码器 */
+    //         if (hipnuc_input(&hipnuc_dev, UART7_data.rev_data[i]) == 1) //
+    //         {
+    //           UploadData_vofa(hipnuc_dev.hi91.pitch,hipnuc_dev.hi91.roll,hipnuc_dev.hi91.yaw,0);
+    //         }
+    //     }
+        if (Size >= 20)
+    { 
+        for (uint16_t i = 0; i <= Size - 20; i++)
         {
-            /*  喂数据给解码器 */
-            if (hipnuc_input(&hipnuc_dev, UART7_data.rev_data[i]) == 1) //
+            if (UART1_data.rev_data[i] == 0xAA)
             {
-              UploadData_vofa(hipnuc_dev.hi91.pitch,hipnuc_dev.hi91.roll,hipnuc_dev.hi91.yaw,0);
+                // 找到帧头，尝试解析。decodeNAVdata 内部包含 CRC 校验，如果通过则更新数据
+                decodeNAVdata(&Navigation_receive_1, &UART7_data.rev_data[i], 20);
+                Navigation_online = NAV_ONLINE_TIMEOUT_MS;
             }
         }
+    }
     // 重新启动DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(huart, UART7_data.rev_data, UART_BUFFER_SIZE);
     __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT); // 关闭半传输中断

@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-02 11:41:25
+ * @LastEditTime: 2026-05-06 04:03:56
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -53,6 +53,7 @@ uint8_t RelativeAngle_IsFresh(void)
 }
 float aa_scan_yaw_limit_deg  = 60.0f; // 扫描yaw幅度 (deg)
 float aa_scan_yaw_speed_deg_s = SCAN_YAW_SPEED; // 扫描yaw速度 (deg/s)
+float aa_scan_yaw_step_deg   = 0.16f; // 扫描yaw位置步长 (deg/tick)
 float aa_scan_pitch_step_deg = 0.15f; // 扫描pitch步长 (deg/tick)
 
 uint8_t Debug_Sentry_Revive_State = 0;
@@ -277,7 +278,7 @@ void STM32_to_MINIPC()
 {
     toMINIPC.header[0] = 'S';
     toMINIPC.header[1] = 'P';
-    toMINIPC.mode = MODE_AUTO_AIM;
+    toMINIPC.mode = MODE_SMALL_BUFF;
     toMINIPC.yaw = degree2rad(imu_gimbal.yaw);//IMU_data.AHRS.yaw;
     toMINIPC.pitch = degree2rad(imu_gimbal.pitch);//IMU_data.AHRS.pitch;
     toMINIPC.yaw_vel = imu_gimbal.gyro[2];//IMU_data.gyro[2];
@@ -399,9 +400,8 @@ static void Scan_Internal(void)
     /* 初始同步 */
     if (!AA.scan_init_done) {
         AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pitch_location_now);
-        AA.scan_offset = small_yaw_relative_now;
-        Gimbal.small_yaw.turnover_yaw = (small_yaw_relative_now < 0.0f) ? 1 : 0;
-        AA.scan_yaw_dir = (Gimbal.small_yaw.turnover_yaw == 1) ? 1 : -1;
+        AA.scan_offset = 0.0f;
+        AA.scan_yaw_dir = -1;
         AA.scan_init_done = 1;
     }
 
@@ -423,16 +423,23 @@ static void Scan_Internal(void)
     Global.Gimbal.input.pitch = AA.scan_pitch_deg;
     Gimbal.pitch.pitch_location_set = degree2rad(AA.scan_pitch_deg);
 
-    /* 小Yaw扫描只写速度给定，不污染 yaw 输入链 */
-    if (small_yaw_relative_now >= aa_scan_yaw_limit_deg)
-        Gimbal.small_yaw.turnover_yaw = 0;
-    else if (small_yaw_relative_now <= -aa_scan_yaw_limit_deg)
-        Gimbal.small_yaw.turnover_yaw = 1;
+    /* 小Yaw扫描：相对大Yaw做位置往复 */
+    AA.scan_offset += AA.scan_yaw_dir * aa_scan_yaw_step_deg;
+    if (AA.scan_offset >= aa_scan_yaw_limit_deg)
+    {
+        AA.scan_offset = aa_scan_yaw_limit_deg;
+        AA.scan_yaw_dir = -1;
+    }
+    if (AA.scan_offset <= -aa_scan_yaw_limit_deg)
+    {
+        AA.scan_offset = -aa_scan_yaw_limit_deg;
+        AA.scan_yaw_dir = 1;
+    }
 
-    Gimbal.small_yaw.small_yaw_speed_set =
-        (Gimbal.small_yaw.turnover_yaw == 1) ? aa_scan_yaw_speed_deg_s : -aa_scan_yaw_speed_deg_s;
-    AA.scan_yaw_dir = (Gimbal.small_yaw.turnover_yaw == 1) ? 1 : -1;
-    AA.scan_offset = small_yaw_relative_now;
+    // 通过编码器获取小Yaw相对大Yaw的实际角度，反推大Yaw的世界系角度
+    float big_yaw_world = Gimbal.small_yaw.small_yaw_location_now - small_yaw_relative_now;
+    // 目标 = 大Yaw当前世界角 + 期望的相对偏移
+    Gimbal.small_yaw.small_yaw_location_set = big_yaw_world + AA.scan_offset;
 
 }
 
@@ -440,9 +447,8 @@ static void Scan_Reset_Internal(void)
 {
     AA.scan_init_done = 0;
     AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pitch_location_now);
-    AA.scan_offset    = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+    AA.scan_offset    = 0.0f;
     AA.scan_yaw_dir   = 0;
-    Gimbal.small_yaw.small_yaw_speed_set = 0.0f;
 }
 
 /**
@@ -516,7 +522,7 @@ static void DebugFill_Update(void)
     AA.dbg_yaw_target_raw_deg = rad2degree(Global.Auto.input.shoot_yaw);
     if (AutoAim_IsScanning())
     {
-        AA.dbg_yaw_cmd_deg = (Gimbal.small_yaw.turnover_yaw == 1) ? aa_scan_yaw_limit_deg : -aa_scan_yaw_limit_deg;
+        AA.dbg_yaw_cmd_deg = AA.scan_offset;
         AA.dbg_yaw_now_deg = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     }
     else
