@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-05 16:25:23
+ * @LastEditTime: 2026-05-07 17:25:17
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -270,6 +270,7 @@ void Mode_Switch()
 
         /* 计算相对角度 */
         Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
+       
 
         /* 各模式下的旋转量处理 */
         if (Global.Chassis.mode == FLOW_Chassis)
@@ -294,6 +295,7 @@ void Mode_Switch()
     case Navigation:
 
         Chassis.relative_angle = Chassis_AngleLimit(relative_angle);
+    
 /*         if(Navigation_online != 0 )
         { */
             if (Navigation_receive_1.x_speed != 0 || Navigation_receive_1.y_speed != 0)
@@ -452,6 +454,7 @@ static void Pack_Saltation_Mode(uint8_t data[8])
     uint8_to_bytes(Navigation_receive_1.running_state,  &data[4]); 
     uint8_to_bytes(fromMINIPC.mode,                     &data[5]);
     uint8_to_bytes(AA.is_scanning,                      &data[6]);
+    uint8_to_bytes(Navigation_receive_1.region_code,    &data[7]);
 }
 
 
@@ -460,6 +463,8 @@ static void Pack_TRIGGER_MODE(uint8_t data[8])
     float_to_bytes(Global.Shoot.trigger_mode,  &data[0]);    
     float_to_bytes(Global.Auto.mode,           &data[4]);
 }
+
+
 
 /*  分频调度表 —— IMU 源 1kHz(TIM13), 全速发送
  *                                       div  phase

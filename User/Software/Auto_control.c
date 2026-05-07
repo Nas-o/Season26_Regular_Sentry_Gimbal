@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-06 04:03:56
+ * @LastEditTime: 2026-05-07 17:16:45
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -91,13 +91,13 @@ int encodeSTM32(STM32_data_t *target, unsigned char tx_buff[], unsigned int len)
 
 void decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int len)
 {
-    if (len != 20 || buff[0] != 0xAA) {
+    if (len != 60 || buff[0] != 0xAA) {
         return;
     }
 
-    uint16_t received_crc = (uint16_t)buff[18] | ((uint16_t)buff[19] << 8);
+    uint16_t received_crc = (uint16_t)buff[58] | ((uint16_t)buff[59] << 8);
 
-    uint16_t calculated_crc = Get_Modbus_CRC16(buff, 18);
+    uint16_t calculated_crc = Get_Modbus_CRC16(buff, 58);
 
     if (calculated_crc == received_crc) 
     {
@@ -164,8 +164,10 @@ static const CanRxEntry_t GimbalRxTable[] = {
 
 uint8_t Gimbal_CAN_Dispatch(uint16_t id, uint8_t data[8])
 {
-    for (uint8_t i = 0; i < sizeof(GimbalRxTable)/sizeof(GimbalRxTable[0]); i++) {
-        if (GimbalRxTable[i].id == id) {
+    for (uint8_t i = 0; i < sizeof(GimbalRxTable)/sizeof(GimbalRxTable[0]); i++) 
+    {
+        if (GimbalRxTable[i].id == id) 
+        {
             GimbalRxTable[i].handler(data);
             return 1;  // 匹配成功
         }
@@ -194,7 +196,7 @@ void Navigation_Send_Message()
     append_CRC16_check_sum(buff, sizeof(buff));
 
     /* Vircom_Send(buff, sizeof(buff)); */
-    HAL_UART_Transmit_DMA(UART1_data.huart, buff, sizeof(buff));
+    HAL_UART_Transmit_DMA(UART7_data.huart, buff, sizeof(buff));
     
 }
 
@@ -356,7 +358,8 @@ void MINIPC_to_STM32(void)
 
 
     /* ---- 丢控制时清前馈 ---- */
-    if (!AA.control_req) {
+    if (!AA.control_req) 
+    {
         Global.Auto.input.yaw_ff       = 0.0f;
         Global.Auto.input.pitch_ff     = 0.0f;
         Global.Auto.input.yaw_acc_ff   = 0.0f;
@@ -387,16 +390,16 @@ static void Auto_Control(void)
     AA.target_pitch = -target_pitch_deg;
 }
 
+
 /**
  * @brief 扫描---入口切换
- * 
+ *
  */
 static void Scan_Internal(void)
 {
     const float PITCH_MAX = PITCHI_MAX_ANGLE;
     const float PITCH_MIN = PITCHI_MIN_ANGLE;
     float small_yaw_relative_now = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
-
     /* 初始同步 */
     if (!AA.scan_init_done) {
         AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pitch_location_now);
@@ -458,7 +461,8 @@ static void Scan_Reset_Internal(void)
 static void EdgeAction_Update(void)
 {
     /* 上升沿 (0→1/2, 进入 track): 同步 setpoint */
-    if (AA.control_req && !AA.control_req_last) {
+    if (AA.control_req && !AA.control_req_last) 
+    {
         AA.reacquire_freeze = 1;
         Gimbal.small_yaw.small_yaw_location_set = Gimbal.small_yaw.small_yaw_location_now;
         Global.Gimbal.input.yaw = Gimbal.small_yaw.small_yaw_location_now;
@@ -467,7 +471,8 @@ static void EdgeAction_Update(void)
     }
 
     /* 下降沿 (1/2→0, 离开 track):准备进入扫描 */
-    if (!AA.control_req && AA.control_req_last) {
+    if (!AA.control_req && AA.control_req_last) 
+    {
         Global.Auto.input.yaw_ff = 0;
         Global.Auto.input.pitch_ff = 0;
     }
@@ -477,18 +482,25 @@ static void Planner_Update(void)
 {
     uint8_t auto_enabled = (Global.Auto.mode != NONE);
 
-    if (!auto_enabled) {
+    if (!auto_enabled) 
+    {
         AA.state = AIM_OFF;
         AA.is_scanning = 0;
-    } else if (AA.reacquire_freeze) {
+    } 
+    else if (AA.reacquire_freeze) 
+    {
         AA.state = AIM_REACQUIRE;
             AA.is_scanning = 0;
         /* reacquire 拍: 不调 Auto_Control(), setpoint 保持当前位置 */
-    } else if (AA.control_req) {
+    } 
+    else if (AA.control_req) 
+    {
         AA.state = AIM_TRACK;
         AA.is_scanning = 0;
         Auto_Control();
-    } else {
+    } 
+    else 
+    {
         AA.state = AIM_SCAN;
         if (!AA.is_scanning)
         Scan_Reset_Internal();

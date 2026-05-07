@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-18 12:34:51
+ * @LastEditTime: 2026-05-07 09:03:05
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.h
  */
 #ifndef __AUTO_CONTROL_H__
@@ -198,7 +198,9 @@ typedef struct
     float rotate;
     float yaw_speed;
     uint8_t running_state;  //姿态切换
-    uint16_t crc_val;   // 接收到的CRC16 (Modbus)
+    uint8_t region_code;      //指定区域
+    float reserved[9];
+    uint16_t crc_val;       // 接收到的CRC16 (Modbus)
 } Navigation_data_t;
 #pragma pack()
 

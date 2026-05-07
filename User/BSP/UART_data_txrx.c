@@ -197,14 +197,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     //           UploadData_vofa(hipnuc_dev.hi91.pitch,hipnuc_dev.hi91.roll,hipnuc_dev.hi91.yaw,0);
     //         }
     //     }
-        if (Size >= 20)
+    if (Size >= 60)
     { 
-        for (uint16_t i = 0; i <= Size - 20; i++)
+        for (uint16_t i = 0; i <= Size - 60; i++)
         {
-            if (UART1_data.rev_data[i] == 0xAA)
+            if (UART7_data.rev_data[i] == 0xAA)
             {
                 // 找到帧头，尝试解析。decodeNAVdata 内部包含 CRC 校验，如果通过则更新数据
-                decodeNAVdata(&Navigation_receive_1, &UART7_data.rev_data[i], 20);
+                decodeNAVdata(&Navigation_receive_1, &UART7_data.rev_data[i], 60);
                 Navigation_online = NAV_ONLINE_TIMEOUT_MS;
             }
         }

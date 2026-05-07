@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-03 00:26:39
+ * @LastEditTime: 2026-05-07 17:18:54
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -157,7 +157,7 @@ void Gimbal_Updater()
     else
     {
         /* 手动: 遥控/导航 */
-        if (Global.Chassis.mode == FLOW_Gimbal)
+    if (Global.Chassis.mode == FLOW_Gimbal)
         {
             float encoder_relative = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
             float big_yaw_world = Gimbal.small_yaw.small_yaw_location_now - encoder_relative;
@@ -167,7 +167,7 @@ void Gimbal_Updater()
         {
             Gimbal.small_yaw.small_yaw_location_set = Global.Gimbal.input.yaw; 
         }
-    } 
+    }
     // 假设 Gimbal.small_yaw.small_yaw_location_now 是当前小yaw的角度
 /*     IMU_Rotate_Frame(Gimbal.small_yaw.small_yaw_location_now,&imu_gimbal); */
 }

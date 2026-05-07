@@ -153,8 +153,8 @@ int main(void)
   Refree_system_init();
   imu_init(0x01,0x11,&hfdcan1,&imu_gimbal); 
   imu_init(0x02,0x12,&hfdcan3,&imu_chassis);
-  imu_change_to_request(&imu_gimbal); 
-  imu_change_to_request(&imu_chassis);
+  imu_change_to_active(&imu_gimbal); 
+  imu_change_to_active(&imu_chassis);
 /*   IMU_Init(); */
   HAL_IWDG_Refresh(&hiwdg1);
   HAL_GPIO_WritePin(Power_5V_GPIO_Port, Power_5V_Pin, GPIO_PIN_SET);

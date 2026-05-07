@@ -238,21 +238,19 @@ void IMU_UpdateData(uint8_t* pData, imu_t *imu)
 
 void IMU_MatchData(imu_t *imu)
 {
+    static const uint8_t req_table[] = {
+        GYRO_DATA,
+        EULER_DATA,
+        GYRO_DATA,
+        QUAT_DATA,
+        ACCEL_DATA,
+    };
+
+    imu_read_reg(req_table[imu->request_cnt % 5], imu);
+
     imu->request_cnt++;
-    
-    // --- 优化后的轮询逻辑 ---
-    // 映射关系: 0->ACCEL, 1->GYRO, 2->EULER, 3->QUAT
-    // 对应 dm_imu.h 中的枚举: ACCEL_DATA(1), GYRO_DATA(2), EULER_DATA(3), QUAT_DATA(4)
-    uint8_t reg_id = (imu->request_cnt % 4) + ACCEL_DATA; 
-    
-    // 直接调用现有的读寄存器函数
-    imu_read_reg(reg_id,imu); 
-    // ----------------------
-	
-    if (imu->request_cnt >= 4000)
-    {
-      imu->request_cnt = 0;
-    }
+    if (imu->request_cnt >= 5000)
+        imu->request_cnt = 0;
 }
 
 /**
