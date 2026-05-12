@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-07 17:18:54
+ * @LastEditTime: 2026-05-10 15:04:35
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -65,7 +65,7 @@ void Gimbal_Init()
     
     /*------MIT模式参数初始化------*/
     Gimbal.pitch.kp = 18.0f;  // 位置比例增益 
-    Gimbal.pitch.kd = 1.8f;   // 速度阻尼增益
+    Gimbal.pitch.kd = 1.0f;   // 速度阻尼增益
     Gimbal.pitch.k_gravity = 0.891800784f; // 重力前馈系数
     
     /*PID速度环初始化*/ 
@@ -77,13 +77,13 @@ void Gimbal_Init()
     /*PID位置环初始化*/
     // 遥控
     PID_Set(&Gimbal.pitch.pitch_location_pid, 16.0f, 0.0f, 10.0f, 0.0f, 12.57, 1000);
-    PID_Set(&Gimbal.small_yaw.small_yaw_location_pid, 18.0f, 0.0f, 1.0f, 0.0f, 300, 1000);
+    PID_Set(&Gimbal.small_yaw.small_yaw_location_pid, 18.0f, 0.0f, 1.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, 1000);
     // 自瞄
-    PID_Set(&Gimbal.pitch.pitch_auto_location_pid, 16.0f, 0.0f, 10, 0.0f, 12.57, 100);
-    PID_Set(&Gimbal.small_yaw.small_yaw_auto_location_pid, 18.0f, 0.0f, 1.0f, 0.0f, 300, 1000);
+    PID_Set(&Gimbal.pitch.pitch_auto_location_pid, 16.0f, 0.0f, 10, 0.0f, 12.57, 1000);
+    PID_Set(&Gimbal.small_yaw.small_yaw_auto_location_pid, 18.0f, 0.0f, 1.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, 1000);
 
     // 小yaw速度一阶低通滤波系数 (0~1, 越小滤波越强)
-    Gimbal.small_yaw.small_yaw_speed_lpf_alpha = 0.5f;
+    Gimbal.small_yaw.small_yaw_speed_lpf_alpha = 1.0f;
     Gimbal.small_yaw.small_yaw_speed_now = 0.0f;
     Gimbal.small_yaw.small_yaw_speed_raw = 0.0f;
 
@@ -148,11 +148,16 @@ void Gimbal_Updater()
     /* AutoAim_Update() 已在本拍写好 setpoint (跟踪/扫描/手动均由上层决定) */
     if (AutoAim_IsControllingGimbal())
     {
-        /* 自瞄/扫描: setpoint 已由 Auto_control.c 写入 */
-        /* 扫描态: Scan_Internal() 已直接设置 small_yaw_location_set */
-        /* 跟踪态: Auto_Control 通过 Gimbal_SetYawAngle 写 Global.Gimbal.input.yaw */
-        if (!AutoAim_IsScanning())
+        if (AutoAim_IsScanning())
+        {
+            /* 扫描态: 速度由 Scan_Internal() 直接设置, 位置目标跟随当前值防止退出时跳变 */
+            Gimbal.small_yaw.small_yaw_location_set = Gimbal.small_yaw.small_yaw_location_now;
+        }
+        else
+        {
+            /* 跟踪态 */
             Gimbal.small_yaw.small_yaw_location_set = Global.Gimbal.input.yaw;
+        }
     }
     else
     {
@@ -184,10 +189,17 @@ void Gimbal_Calculater()
 {
     if (!AutoAim_IsTracking())
     {
-        // 非跟踪态手动位置控制
-        Gimbal.small_yaw.small_yaw_speed_set =  PID_Cal(&Gimbal.small_yaw.small_yaw_location_pid, Gimbal.small_yaw.small_yaw_location_now,Gimbal.small_yaw.small_yaw_location_set);  
-        Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set); 
-        
+        if (AutoAim_IsScanning())
+        {
+            // 扫描态：速度已由 Scan_Internal() 直接设置，只走速度环
+            Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set);
+        }
+        else
+        {
+            // 非跟踪非扫描：手动位置控制
+            Gimbal.small_yaw.small_yaw_speed_set = PID_Cal(&Gimbal.small_yaw.small_yaw_location_pid, Gimbal.small_yaw.small_yaw_location_now, Gimbal.small_yaw.small_yaw_location_set);  
+            Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set);
+        }
 
     }
     else
@@ -361,8 +373,4 @@ void Gimbal_SetYawAngle(float angle)
 {
     Global.Gimbal.input.yaw = angle;
 }
-
-
-
-
 

@@ -197,18 +197,27 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     //           UploadData_vofa(hipnuc_dev.hi91.pitch,hipnuc_dev.hi91.roll,hipnuc_dev.hi91.yaw,0);
     //         }
     //     }
-    if (Size >= 60)
-    { 
-        for (uint16_t i = 0; i <= Size - 60; i++)
-        {
-            if (UART7_data.rev_data[i] == 0xAA)
-            {
-                // 找到帧头，尝试解析。decodeNAVdata 内部包含 CRC 校验，如果通过则更新数据
-                decodeNAVdata(&Navigation_receive_1, &UART7_data.rev_data[i], 60);
-                Navigation_online = NAV_ONLINE_TIMEOUT_MS;
+    // --- 动态解析开始 ---
+            // 只要接收到的总长度大于等于结构体长度，就尝试解析
+            if (Size >= NAV_FRAME_SIZE)
+            { 
+                for (uint16_t i = 0; i <= Size - NAV_FRAME_SIZE; )
+                {
+                    // 检查帧头
+                    if (UART7_data.rev_data[i] == 0xAA)
+                    {
+                        // 传入自动计算的长度 NAV_FRAME_SIZE
+                        if (decodeNAVdata(&Navigation_receive_1, &UART7_data.rev_data[i], NAV_FRAME_SIZE))
+                        {
+                            Navigation_online = NAV_ONLINE_TIMEOUT_MS;
+                            // 核心优化：成功解析后直接跳过整帧，防止对 float 里的数据误判
+                            i += NAV_FRAME_SIZE;
+                            continue;
+                        }
+                    }
+                    i++; // 未找到或校验失败，向后滑动 1 字节
+                }
             }
-        }
-    }
     // 重新启动DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(huart, UART7_data.rev_data, UART_BUFFER_SIZE);
     __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT); // 关闭半传输中断

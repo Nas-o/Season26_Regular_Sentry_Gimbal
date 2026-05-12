@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-07 09:03:05
+ * @LastEditTime: 2026-05-12 20:56:04
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.h
  */
 #ifndef __AUTO_CONTROL_H__
@@ -139,6 +139,8 @@ typedef struct {
     float pitch_vel;     // 俯仰角速度 (rad/s)
     float pitch_acc;     // 俯仰角加速度 (rad/s^2) 
 
+    // float distance;      // 目标到相机距离
+
     uint16_t crc16;      // CRC16 校验
 } MINIPC_data_t;
 
@@ -186,6 +188,8 @@ typedef struct
     uint16_t outpost_hp;
     uint16_t base_hp;
     uint32_t rfid_status;
+    float contact_angle;  //大小yaw差角
+    uint8_t is_fire;    // /是否开火 0 为不开火，其他值都对
 } STM32ROS_data_t;
 
 
@@ -199,7 +203,8 @@ typedef struct
     float yaw_speed;
     uint8_t running_state;  //姿态切换
     uint8_t region_code;      //指定区域
-    float reserved[9];
+    uint8_t big_yaw_aligned;   //大yaw对齐
+    float reserved[8];
     uint16_t crc_val;       // 接收到的CRC16 (Modbus)
 } Navigation_data_t;
 #pragma pack()
@@ -297,7 +302,7 @@ void decodeMINIPCdata(MINIPC_data_t *target, unsigned char buff[], unsigned int 
 void MINIPC_to_STM32(void);
 void MINIPC_SyncShadowToWorkingCopy(void);
 void Navigation_Send_Message(void);
-void decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int len);
+uint8_t decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int len);
 uint8_t Gimbal_CAN_Dispatch(uint16_t id, uint8_t data[8]);
 uint8_t RelativeAngle_IsFresh(void);
 
@@ -329,6 +334,12 @@ extern uint32_t aa_rx_timeout_ms;
 extern float    aa_yaw_reject_deg;
 extern float    aa_yaw_ff_max_deg_s;
 
+/* ---- 通信丢包检测 ---- */
+extern uint32_t lost_pkg_cnt[4];
+void LostPkg_Detect(const float vals[], uint8_t n);
+void LostPkg_Reset(uint8_t ch);
+
 #define NAV_ONLINE_TIMEOUT_MS 200
+#define NAV_FRAME_SIZE (sizeof(Navigation_data_t))
 #endif
 

@@ -77,6 +77,7 @@ typedef struct
     float small_yaw_location_set;
     float current;
     int turnover_yaw;
+    float small_from_big_feedforward;
   }small_yaw;
 
   struct 

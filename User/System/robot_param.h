@@ -93,13 +93,13 @@
 #define GIMBAL_PITCH_DIRECTION (1)
 
 //电机零点设置
-#define SMALL_YAW_ZERO   (209.18f)
+#define SMALL_YAW_ZERO   (29.92f)
 /* #define BIG_YAW_ZERO  (180.00f) */
 #define PITCH_ZERO (0.0f)
-#define SMALL_YAW_ECD_ZERO (4761.0f)
+#define SMALL_YAW_ECD_ZERO (681.0f)
 
 //电机扫描参数
-#define SCAN_YAW_SPEED 160.0f
+#define SCAN_YAW_SPEED 120.0f
 
 
 /*------------------------------------------------- Shoot -------------------------------------------------------------*/

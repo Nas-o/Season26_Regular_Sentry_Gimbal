@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-07 17:16:45
+ * @LastEditTime: 2026-05-12 02:28:24
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -51,7 +51,7 @@ uint8_t RelativeAngle_IsFresh(void)
 
     return (HAL_GetTick() - relative_tick <= relative_timeout_ms);
 }
-float aa_scan_yaw_limit_deg  = 60.0f; // 扫描yaw幅度 (deg)
+float aa_scan_yaw_limit_deg  = 45.0f; // 扫描yaw幅度 (deg)
 float aa_scan_yaw_speed_deg_s = SCAN_YAW_SPEED; // 扫描yaw速度 (deg/s)
 float aa_scan_yaw_step_deg   = 0.16f; // 扫描yaw位置步长 (deg/tick)
 float aa_scan_pitch_step_deg = 0.15f; // 扫描pitch步长 (deg/tick)
@@ -89,21 +89,24 @@ int encodeSTM32(STM32_data_t *target, unsigned char tx_buff[], unsigned int len)
     return 0;
 }
 
-void decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int len)
+// 将返回类型从 void 改为 uint8_t
+uint8_t decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int len)
 {
-    if (len != 60 || buff[0] != 0xAA) {
-        return;
+    if (len != sizeof(Navigation_data_t) || buff[0] != 0xAA) {
+        return 0; // 解析失败
     }
 
-    uint16_t received_crc = (uint16_t)buff[58] | ((uint16_t)buff[59] << 8);
-
-    uint16_t calculated_crc = Get_Modbus_CRC16(buff, 58);
+    uint16_t received_crc = (uint16_t)buff[len - 2] | ((uint16_t)buff[len - 1] << 8);
+    uint16_t calculated_crc = Get_Modbus_CRC16(buff, len - 2);
 
     if (calculated_crc == received_crc) 
     {
         memcpy(target, buff, sizeof(Navigation_data_t));
         Navigation_online = 1;
+        return 1; // 解析成功
     }
+    
+    return 0; // CRC 校验失败
 }
 
 static void Receive_RefereeData1(uint8_t data[8])
@@ -131,27 +134,10 @@ static void Receive_RefereeData3(uint8_t data[8])
 
 static void Receive_RelativeAngle(uint8_t data[8])
 {
-    uint32_t last_tick = relative_tick;
-    uint8_t use_seq = (data[5] == 0xA5u && data[6] == 0x5Au);
-
+    // 直接解析两个 float
     relative_angle = bytes_to_float(&data[0]);
-    relative_tick = HAL_GetTick();
-
-    if (use_seq)
-    {
-        uint8_t new_seq = bytes_to_uint8(&data[4]);
-
-        if (last_tick != 0)
-        {
-            uint8_t step = (uint8_t)(new_seq - relative_seq);
-            if (step > 1)
-            {
-                relative_lost += (uint32_t)(step - 1);
-            }
-        }
-
-        relative_seq = new_seq;
-    }
+    Gimbal.small_yaw.small_from_big_feedforward = bytes_to_float(&data[4]); // 如果需要速度的话
+  
 }
 
 static const CanRxEntry_t GimbalRxTable[] = {
@@ -189,6 +175,8 @@ void Navigation_Send_Message()
     stm32send_1.outpost_hp = Referee.outpost_HP;                               // 前哨站血量
     stm32send_1.base_hp = Referee.base_HP;                                     // 基地血量
     stm32send_1.rfid_status = Referee.rfid_status;                               // RFID状态
+    stm32send_1.contact_angle = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+    stm32send_1.is_fire = Global.Shoot.trigger_mode;
 
     static uint8_t buff[sizeof(STM32ROS_data_t) + 3];
     buff[0] = 0xA5;
@@ -280,7 +268,7 @@ void STM32_to_MINIPC()
 {
     toMINIPC.header[0] = 'S';
     toMINIPC.header[1] = 'P';
-    toMINIPC.mode = MODE_SMALL_BUFF;
+    toMINIPC.mode = MODE_AUTO_AIM;
     toMINIPC.yaw = degree2rad(imu_gimbal.yaw);//IMU_data.AHRS.yaw;
     toMINIPC.pitch = degree2rad(imu_gimbal.pitch);//IMU_data.AHRS.pitch;
     toMINIPC.yaw_vel = imu_gimbal.gyro[2];//IMU_data.gyro[2];
@@ -311,25 +299,6 @@ static float WrapDeltaDeg(float x)
     return x;
 }
 
-/**
- * @brief 单帧数据合理性检查
- * 
- * @param pkt 
- * @return uint8_t 
- */
-static uint8_t AimPacket_IsSane(const MINIPC_data_t *pkt)
-{
-    float yaw_deg      = rad2degree(pkt->yaw);
-    float dyaw_deg     = WrapDeltaDeg(yaw_deg - imu_gimbal.yaw);
-    float yaw_ff_deg_s = rad2degree(pkt->yaw_vel);
-
-    if (fabsf(dyaw_deg) > aa_yaw_reject_deg)
-        return 0;
-    if (fabsf(yaw_ff_deg_s) > aa_yaw_ff_max_deg_s)
-        return 0;
-    return 1;
-}
-
 void MINIPC_to_STM32(void)
 {
     /* ---- 链路新鲜度 ---- */
@@ -345,8 +314,8 @@ void MINIPC_to_STM32(void)
     AA.mode_raw = fromMINIPC.mode;
     AA.control_req = AA.rx_fresh && (AA.mode_raw != CTRL_NO_CONTROL);
 
-    /* ---- 只在 fresh && control && 新包 && 数据合理 时更新目标数据 ---- */
-    if (is_new_pkt && AA.control_req && AimPacket_IsSane(&fromMINIPC))
+    /* ---- 只在 fresh && control && 新包时更新目标数据 ---- */
+    if (is_new_pkt && AA.control_req)
     {
         Global.Auto.input.shoot_yaw    = fromMINIPC.yaw;
         Global.Auto.input.shoot_pitch  = fromMINIPC.pitch;
@@ -357,8 +326,8 @@ void MINIPC_to_STM32(void)
     }
 
 
-    /* ---- 丢控制时清前馈 ---- */
-    if (!AA.control_req) 
+    /* ---- 非 TRACK 状态一律清前馈 (丢控制 / 扫描 / 重获目标均不用前馈) ---- */
+    if (!AutoAim_IsTracking())
     {
         Global.Auto.input.yaw_ff       = 0.0f;
         Global.Auto.input.pitch_ff     = 0.0f;
@@ -426,23 +395,24 @@ static void Scan_Internal(void)
     Global.Gimbal.input.pitch = AA.scan_pitch_deg;
     Gimbal.pitch.pitch_location_set = degree2rad(AA.scan_pitch_deg);
 
-    /* 小Yaw扫描：相对大Yaw做位置往复 */
-    AA.scan_offset += AA.scan_yaw_dir * aa_scan_yaw_step_deg;
-    if (AA.scan_offset >= aa_scan_yaw_limit_deg)
+    /* 小Yaw扫描：直接速度控制 */
+    AA.scan_offset = small_yaw_relative_now;
+    float scan_yaw_speed_deg_s = 0.0f;
+    if (toMINIPC.mode == MODE_AUTO_AIM)
     {
-        AA.scan_offset = aa_scan_yaw_limit_deg;
-        AA.scan_yaw_dir = -1;
+        if (small_yaw_relative_now >= aa_scan_yaw_limit_deg)
+            AA.scan_yaw_dir = -1;
+        else if (small_yaw_relative_now <= -aa_scan_yaw_limit_deg)
+            AA.scan_yaw_dir = 1;
+        scan_yaw_speed_deg_s = aa_scan_yaw_speed_deg_s;
     }
-    if (AA.scan_offset <= -aa_scan_yaw_limit_deg)
+    else
     {
-        AA.scan_offset = -aa_scan_yaw_limit_deg;
-        AA.scan_yaw_dir = 1;
+        AA.scan_yaw_dir = 0;
     }
+    
 
-    // 通过编码器获取小Yaw相对大Yaw的实际角度，反推大Yaw的世界系角度
-    float big_yaw_world = Gimbal.small_yaw.small_yaw_location_now - small_yaw_relative_now;
-    // 目标 = 大Yaw当前世界角 + 期望的相对偏移
-    Gimbal.small_yaw.small_yaw_location_set = big_yaw_world + AA.scan_offset;
+    Gimbal.small_yaw.small_yaw_speed_set = AA.scan_yaw_dir * scan_yaw_speed_deg_s;
 
 }
 
@@ -575,6 +545,10 @@ void AutoAim_Update(void)
 
     /* 7. 保存本拍 control_req 用于下一拍边沿检测 */
     AA.control_req_last = AA.control_req;
+
+    /* 8.丢包检测 */
+    float chk[4] = {imu_gimbal.gyro[0],imu_gimbal.gyro[2],fromMINIPC.yaw_vel, fromMINIPC.pitch_vel};
+    LostPkg_Detect(chk, 4);
 }
 
 /* =====================================================================
@@ -598,4 +572,61 @@ uint8_t AutoAim_IsScanning(void)
 uint8_t AutoAim_ShouldBigYawFollow(void)
 {
     return (AA.state != AIM_OFF) ? 1 : 0;
+}
+
+/* =====================================================================
+ *  通信丢包实时检测
+ *  用法: 每次收到新数据时调用, 传入当前值; 函数内部与上次值比较,
+ *        若值未更新(相同)则认为丢包, 对应计数器自增.
+ *        最多同时监测 4 个变量 (通道 0~3).
+ * ===================================================================== */
+uint32_t lost_pkg_cnt[4] = {0};          // 4个通道的丢包计数
+static float lost_pkg_last_val[4] = {0}; // 上一次各通道的值
+static uint8_t lost_pkg_init[4] = {0};   // 初始化标志
+
+/**
+ * @brief 通信丢包检测 — 传入最多4个变量的当前值
+ * @param vals   指向浮点数组, 包含各通道当前值
+ * @param n      本次传入的通道数 (1~4)
+ * @note  若某通道当前值与上次完全相同, 则认为该通道丢包, lost_pkg_cnt[ch]++
+ *        首次调用时仅记录初值, 不计丢包.
+ */
+void LostPkg_Detect(const float vals[], uint8_t n)
+{
+    if (n > 4) n = 4;
+    for (uint8_t i = 0; i < n; i++)
+    {
+        if (!lost_pkg_init[i])
+        {
+            lost_pkg_last_val[i] = vals[i];
+            lost_pkg_init[i] = 1;
+            continue;
+        }
+        if (vals[i] == lost_pkg_last_val[i])
+        {
+            lost_pkg_cnt[i]++;
+        }
+        lost_pkg_last_val[i] = vals[i];
+    }
+}
+
+/**
+ * @brief 重置指定通道的丢包计数
+ * @param ch 通道号 0~3, 传入 0xFF 则全部重置
+ */
+void LostPkg_Reset(uint8_t ch)
+{
+    if (ch == 0xFF)
+    {
+        for (uint8_t i = 0; i < 4; i++)
+        {
+            lost_pkg_cnt[i] = 0;
+            lost_pkg_init[i] = 0;
+        }
+    }
+    else if (ch < 4)
+    {
+        lost_pkg_cnt[ch] = 0;
+        lost_pkg_init[ch] = 0;
+    }
 }

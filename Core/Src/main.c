@@ -115,7 +115,7 @@ int main(void)
 
   /* USER CODE END Init */
 
-  /* Confi£»£¬£¿gure the system clock */
+  /* Configure the system clock */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
@@ -153,11 +153,11 @@ int main(void)
   Refree_system_init();
   imu_init(0x01,0x11,&hfdcan1,&imu_gimbal); 
   imu_init(0x02,0x12,&hfdcan3,&imu_chassis);
-  imu_change_to_active(&imu_gimbal); 
-  imu_change_to_active(&imu_chassis);
 /*   IMU_Init(); */
   HAL_IWDG_Refresh(&hiwdg1);
   HAL_GPIO_WritePin(Power_5V_GPIO_Port, Power_5V_Pin, GPIO_PIN_SET);
+  imu_change_to_request(&imu_gimbal); 
+  imu_change_to_request(&imu_chassis);
   HAL_GPIO_WritePin(Camera_ctrl_GPIO_Port, Camera_ctrl_Pin, GPIO_PIN_SET);
   HAL_TIM_Base_Start_IT(&htim14);
   HAL_TIM_Base_Start_IT(&htim13);
@@ -333,8 +333,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM13) // 1000HZ
   {
     /* IMU_Updata(); */ //Ãî°åÍÓÂİÒÇ
-    IMU_MatchData(&imu_chassis); //´ïÃîÍâÖÃÍÓÂİÒÇ£¨µ×ÅÌ¸úËæ£©
-    IMU_MatchData(&imu_gimbal); //´ïÃîÍâÖÃÍÓÂİÒÇ£¨ÔÆÌ¨×ÔÃé£©
+     IMU_MatchData(&imu_chassis); //´ïÃîÍâÖÃÍÓÂİÒÇ£¨µ×ÅÌ¸úËæ£©
+     IMU_MatchData(&imu_gimbal); //´ïÃîÍâÖÃÍÓÂİÒÇ£¨ÔÆÌ¨×ÔÃé£©
     /* UploadData_vofa(imu_gimbal.pitch,imu_gimbal.yaw,imu_gimbal.roll,imu_gimbal.gyro[1]); */
     /* ¡¤ */
 /*     for (int i = 0; i < 8; i++){

@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-07 17:25:17
+ * @LastEditTime: 2026-05-09 03:07:02
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -48,7 +48,8 @@ static fp32 deta[4] = {45.0f, 45.0f, 45.0f, 45.0f};
 RC_ctrl_t RC_data;
 RampGenerator Vx_ramp, Vy_ramp, Vw_ramp;
 int Last_Hp = 400;
-static uint8_t hurt_high_spin_latched = 0;
+static uint32_t hurt_tick = 0;          // 最近一次掉血的时刻
+static uint32_t hurt_high_duration_ms = 3000; // 掉血后保持高速的时长(ms)
 static uint8_t nav_offline_dash_active = 0;
 static uint8_t nav_offline_dash_finished = 0;
 static float nav_offline_dash_start_s = 0.0f;
@@ -300,34 +301,28 @@ void Mode_Switch()
         { */
             if (Navigation_receive_1.x_speed != 0 || Navigation_receive_1.y_speed != 0)
         {
-            Global.Chassis.input.x = Navigation_receive_1.x_speed;
-            Global.Chassis.input.y = Navigation_receive_1.y_speed;
-            Global.Chassis.input.r = 0;//60 * RPM_TO_RAD_S;
+            Global.Chassis.input.x = Navigation_receive_1.x_speed * 1.5;
+            Global.Chassis.input.y = Navigation_receive_1.y_speed * 1.5;
+            Global.Chassis.input.r = 30 * RPM_TO_RAD_S;//60 * RPM_TO_RAD_S;
         }
         else
         {
             Global.Chassis.input.x = 0;
             Global.Chassis.input.y = 0;
                         if(Referee.game_progress == 4)
-                            {
-                                // 检测到掉血后锁存高速状态，直到退出比赛阶段
-                                if (Referee.current_HP < Last_Hp)
-                                {
-                                    hurt_high_spin_latched = 1;
-                                }
+                        {
+                            // 检测掉血，刷新计时
+                            if (Referee.current_HP < Last_Hp)
+                                hurt_tick = HAL_GetTick();
 
-                                if (hurt_high_spin_latched)
-                                {
-                                    Global.Chassis.input.r = Variable_Spin_Update();
-                                }
-                                else
-                                {
-                                    Global.Chassis.input.r = 80 * RPM_TO_RAD_S;
-                                }
-                            }
+                            // 掉血后一段时间内高速，否则低速
+                            if ((HAL_GetTick() - hurt_tick) < hurt_high_duration_ms)
+                                Global.Chassis.input.r = Variable_Spin_Update();
+                            else
+                                Global.Chassis.input.r = 60 * RPM_TO_RAD_S;
+                        }
                         else
                         {
-                            hurt_high_spin_latched = 0;
                             Global.Chassis.input.r = 0.0f;
                         }
                         Last_Hp = Referee.current_HP;
