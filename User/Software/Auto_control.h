@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-12 20:56:04
+ * @LastEditTime: 2026-05-15 03:18:42
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.h
  */
 #ifndef __AUTO_CONTROL_H__
@@ -139,7 +139,7 @@ typedef struct {
     float pitch_vel;     // 俯仰角速度 (rad/s)
     float pitch_acc;     // 俯仰角加速度 (rad/s^2) 
 
-    // float distance;      // 目标到相机距离
+    float distance;      // 目标到相机距离
 
     uint16_t crc16;      // CRC16 校验
 } MINIPC_data_t;
@@ -190,6 +190,7 @@ typedef struct
     uint32_t rfid_status;
     float contact_angle;  //大小yaw差角
     uint8_t is_fire;    // /是否开火 0 为不开火，其他值都对
+    float distance;
 } STM32ROS_data_t;
 
 
@@ -328,7 +329,8 @@ extern volatile uint32_t relative_timeout_ms;
 extern volatile uint32_t relative_tick;
 extern volatile uint32_t relative_lost;
 extern volatile uint8_t  relative_seq;
-
+extern float aa_big_yaw_ff_gain;
+extern float aa_big_yaw_ff_max_deg_s;
 /* ---- 可调阈值 (定义在 Auto_control.c) ---- */
 extern uint32_t aa_rx_timeout_ms;
 extern float    aa_yaw_reject_deg;

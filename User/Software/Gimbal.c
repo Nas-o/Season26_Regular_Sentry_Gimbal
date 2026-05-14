@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-10 15:04:35
+ * @LastEditTime: 2026-05-13 06:19:31
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -47,7 +47,23 @@ void Gimbal_Limit(float pitch_up_angle, float pitch_down_angle, float yaw_L_angl
     }
 }
 
+static float Gimbal_GetSmallYawBigFollowFFDegS(void)
+{
+    float ff_deg_s = 0.0f;
 
+    /* 对板数据不新鲜时，绝不使用这路前馈 */
+    if (!RelativeAngle_IsFresh())
+        return 0.0f;
+
+    /* 下板发来的是 deg/s，这里不要再做 rad2degree */
+    ff_deg_s = -Gimbal.small_yaw.small_from_big_feedforward * aa_big_yaw_ff_gain;
+
+    /* 执行安全限幅 */
+    if (fabsf(ff_deg_s) > aa_big_yaw_ff_max_deg_s)
+        return 0.0f;
+
+    return ff_deg_s;
+}
 
 /*-------------------- Init --------------------*/
 
@@ -65,15 +81,15 @@ void Gimbal_Init()
     
     /*------MIT模式参数初始化------*/
     Gimbal.pitch.kp = 18.0f;  // 位置比例增益 
-    Gimbal.pitch.kd = 1.0f;   // 速度阻尼增益
+    Gimbal.pitch.kd = 1.2f;   // 速度阻尼增益
     Gimbal.pitch.k_gravity = 0.891800784f; // 重力前馈系数
     
     /*PID速度环初始化*/ 
     // 遥控
     PID_Set(&Gimbal.pitch.pitch_speed_pid, 0.165f, 0.0f, 0.2f, 0.0f, 7, 0.1);
-    PID_Set(&Gimbal.small_yaw.small_yaw_speed_pid, 85.0f, 0.01f, 1.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, GIMBALMOTOR_MAX_CURRENT);
+    PID_Set(&Gimbal.small_yaw.small_yaw_speed_pid, 65.0f, 0.01f, 3.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, GIMBALMOTOR_MAX_CURRENT);
     PID_Set(&Gimbal.pitch.pitch_auto_speed_pid, 0.165f, 0, 0.2, 0.0f, 7, 0.1);
-    PID_Set(&Gimbal.small_yaw.small_yaw_auto_speed_pid, 85.0f, 0.01f, 1.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, GIMBALMOTOR_MAX_CURRENT);
+    PID_Set(&Gimbal.small_yaw.small_yaw_auto_speed_pid, 85.0f, 0.01f, 3.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, GIMBALMOTOR_MAX_CURRENT);
     /*PID位置环初始化*/
     // 遥控
     PID_Set(&Gimbal.pitch.pitch_location_pid, 16.0f, 0.0f, 10.0f, 0.0f, 12.57, 1000);
@@ -98,6 +114,9 @@ void Gimbal_Init()
     Gimbal.pitch.gravity_integral = 0.0f;
     Gimbal.pitch.ki_gravity = 0.1f;             // 起步值，可在线调整
     Gimbal.pitch.gravity_integral_limit = 0.8f; // N·m 限幅
+
+    //大yaw前馈
+    Gimbal.small_yaw.small_from_big_feedforward = 0;
 }
 
 
@@ -190,10 +209,17 @@ void Gimbal_Calculater()
     if (!AutoAim_IsTracking())
     {
         if (AutoAim_IsScanning())
-        {
-            // 扫描态：速度已由 Scan_Internal() 直接设置，只走速度环
-            Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set);
-        }
+            {
+                float big_yaw_ff_deg_s = Gimbal_GetSmallYawBigFollowFFDegS();
+                float scan_speed_cmd_deg_s = Gimbal.small_yaw.small_yaw_speed_set + big_yaw_ff_deg_s;
+
+                // 扫描态：用编码器速度做反馈，避免IMU世界系耦合导致抖动
+                float encoder_speed_deg_s = (float)DJIMotor_GetData(SMALLYAWMotor).speed_rpm * 6.0f;
+                Gimbal.small_yaw.current =
+                    PID_Cal(&Gimbal.small_yaw.small_yaw_speed_pid,
+                            encoder_speed_deg_s,
+                            scan_speed_cmd_deg_s);
+            }
         else
         {
             // 非跟踪非扫描：手动位置控制
@@ -204,18 +230,25 @@ void Gimbal_Calculater()
     }
     else
     { 
-        /* yaw_ff: 跟踪态才加前馈, 执行安全限幅 */
         float yaw_ff_deg_s = 0.0f;
-        if (AutoAim_IsTracking())
-        {
-            yaw_ff_deg_s = rad2degree(Global.Auto.input.yaw_ff);
-            if (fabsf(yaw_ff_deg_s) > aa_yaw_ff_max_deg_s)
-                yaw_ff_deg_s = 0.0f;
-        }
+        float big_yaw_ff_deg_s = Gimbal_GetSmallYawBigFollowFFDegS();
 
-        Gimbal.small_yaw.small_yaw_speed_set = PID_Cal(&Gimbal.small_yaw.small_yaw_auto_location_pid, Gimbal.small_yaw.small_yaw_location_now, Gimbal.small_yaw.small_yaw_location_set)
-                                              + yaw_ff_deg_s;
-        Gimbal.small_yaw.current = PID_Cal(&Gimbal.small_yaw.small_yaw_auto_speed_pid, Gimbal.small_yaw.small_yaw_speed_now, Gimbal.small_yaw.small_yaw_speed_set);
+        /* 视觉给的小yaw前馈: 原协议是 rad/s，这里转成 deg/s */
+        yaw_ff_deg_s = rad2degree(Global.Auto.input.yaw_ff);
+        if (fabsf(yaw_ff_deg_s) > aa_yaw_ff_max_deg_s)
+            yaw_ff_deg_s = 0.0f;
+
+        Gimbal.small_yaw.small_yaw_speed_set =
+            PID_Cal(&Gimbal.small_yaw.small_yaw_auto_location_pid,
+                    Gimbal.small_yaw.small_yaw_location_now,
+                    Gimbal.small_yaw.small_yaw_location_set)
+            + yaw_ff_deg_s
+            + big_yaw_ff_deg_s;
+
+        Gimbal.small_yaw.current =
+            PID_Cal(&Gimbal.small_yaw.small_yaw_auto_speed_pid,
+                    Gimbal.small_yaw.small_yaw_speed_now,
+                    Gimbal.small_yaw.small_yaw_speed_set);
     }
 }
 

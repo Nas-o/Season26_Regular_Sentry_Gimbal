@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-12 02:28:24
+ * @LastEditTime: 2026-05-13 06:20:09
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -41,6 +41,8 @@ volatile uint32_t relative_timeout_ms = 8;
 volatile uint32_t relative_tick = 0;
 volatile uint32_t relative_lost = 0;
 volatile uint8_t  relative_seq = 0;
+float aa_big_yaw_ff_gain = 1.0f;
+float aa_big_yaw_ff_max_deg_s = 120.0f;
 
 uint8_t RelativeAngle_IsFresh(void)
 {
@@ -138,6 +140,7 @@ static void Receive_RelativeAngle(uint8_t data[8])
     relative_angle = bytes_to_float(&data[0]);
     Gimbal.small_yaw.small_from_big_feedforward = bytes_to_float(&data[4]); // 如果需要速度的话
   
+    relative_tick = HAL_GetTick();
 }
 
 static const CanRxEntry_t GimbalRxTable[] = {
@@ -177,6 +180,7 @@ void Navigation_Send_Message()
     stm32send_1.rfid_status = Referee.rfid_status;                               // RFID状态
     stm32send_1.contact_angle = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     stm32send_1.is_fire = Global.Shoot.trigger_mode;
+    stm32send_1.distance = fromMINIPC.distance;
 
     static uint8_t buff[sizeof(STM32ROS_data_t) + 3];
     buff[0] = 0xA5;
