@@ -301,8 +301,8 @@ void Mode_Switch()
         { */
             if (Navigation_receive_1.x_speed != 0 || Navigation_receive_1.y_speed != 0)
         {
-            Global.Chassis.input.x = Navigation_receive_1.x_speed * 1.5;
-            Global.Chassis.input.y = Navigation_receive_1.y_speed * 1.5;
+            Global.Chassis.input.x = Navigation_receive_1.x_speed ;
+            Global.Chassis.input.y = Navigation_receive_1.y_speed ;
             Global.Chassis.input.r = 0 * RPM_TO_RAD_S;//60 * RPM_TO_RAD_S;
         }
         else

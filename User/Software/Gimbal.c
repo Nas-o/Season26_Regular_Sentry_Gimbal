@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-13 06:19:31
+ * @LastEditTime: 2026-05-16 08:58:52
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -80,8 +80,8 @@ void Gimbal_Init()
     DJIMotor_Init(DJI_GM6020, SMALLYAWMotor);
     
     /*------MIT模式参数初始化------*/
-    Gimbal.pitch.kp = 18.0f;  // 位置比例增益 
-    Gimbal.pitch.kd = 1.2f;   // 速度阻尼增益
+    Gimbal.pitch.kp = 15.0f;  // 位置比例增益 
+    Gimbal.pitch.kd = 1.1f;   // 速度阻尼增益
     Gimbal.pitch.k_gravity = 0.891800784f; // 重力前馈系数
     
     /*PID速度环初始化*/ 

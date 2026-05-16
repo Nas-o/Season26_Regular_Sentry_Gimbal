@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-15 03:18:42
+ * @LastEditTime: 2026-05-16 02:55:50
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.h
  */
 #ifndef __AUTO_CONTROL_H__
@@ -139,7 +139,7 @@ typedef struct {
     float pitch_vel;     // 俯仰角速度 (rad/s)
     float pitch_acc;     // 俯仰角加速度 (rad/s^2) 
 
-    float distance;      // 目标到相机距离
+    //float distance;      // 目标到相机距离
 
     uint16_t crc16;      // CRC16 校验
 } MINIPC_data_t;

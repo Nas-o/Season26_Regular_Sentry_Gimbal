@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-13 06:20:09
+ * @LastEditTime: 2026-05-16 08:56:51
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -36,7 +36,7 @@ AutoAim_t AA;
 
 uint32_t aa_rx_timeout_ms    = 100;   // 链路新鲜度: 超时则不信任任何帧 
 float aa_yaw_reject_deg      = 60.0f; // 执行安全: 目标yaw与IMU差值超过此阈值 → 拒绝该帧
-float aa_yaw_ff_max_deg_s    = 80.0f; // 执行安全: yaw前馈速度限幅 (deg/s)
+float aa_yaw_ff_max_deg_s    = 100.0f; // 执行安全: yaw前馈速度限幅 (deg/s)
 volatile uint32_t relative_timeout_ms = 8;
 volatile uint32_t relative_tick = 0;
 volatile uint32_t relative_lost = 0;
@@ -180,7 +180,7 @@ void Navigation_Send_Message()
     stm32send_1.rfid_status = Referee.rfid_status;                               // RFID状态
     stm32send_1.contact_angle = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     stm32send_1.is_fire = Global.Shoot.trigger_mode;
-    stm32send_1.distance = fromMINIPC.distance;
+    //stm32send_1.distance = fromMINIPC.distance;
 
     static uint8_t buff[sizeof(STM32ROS_data_t) + 3];
     buff[0] = 0xA5;
@@ -272,7 +272,7 @@ void STM32_to_MINIPC()
 {
     toMINIPC.header[0] = 'S';
     toMINIPC.header[1] = 'P';
-    toMINIPC.mode = MODE_AUTO_AIM;
+    toMINIPC.mode = MODE_SMALL_BUFF;
     toMINIPC.yaw = degree2rad(imu_gimbal.yaw);//IMU_data.AHRS.yaw;
     toMINIPC.pitch = degree2rad(imu_gimbal.pitch);//IMU_data.AHRS.pitch;
     toMINIPC.yaw_vel = imu_gimbal.gyro[2];//IMU_data.gyro[2];
