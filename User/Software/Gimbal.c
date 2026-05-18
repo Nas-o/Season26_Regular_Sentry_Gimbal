@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-16 08:58:52
+ * @LastEditTime: 2026-05-19 02:43:06
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.c
  */
 /*
@@ -80,8 +80,8 @@ void Gimbal_Init()
     DJIMotor_Init(DJI_GM6020, SMALLYAWMotor);
     
     /*------MIT模式参数初始化------*/
-    Gimbal.pitch.kp = 15.0f;  // 位置比例增益 
-    Gimbal.pitch.kd = 1.1f;   // 速度阻尼增益
+    Gimbal.pitch.kp = 18.0f;  // 位置比例增益 
+    Gimbal.pitch.kd = 1.2f;   // 速度阻尼增益
     Gimbal.pitch.k_gravity = 0.891800784f; // 重力前馈系数
     
     /*PID速度环初始化*/ 
@@ -89,7 +89,7 @@ void Gimbal_Init()
     PID_Set(&Gimbal.pitch.pitch_speed_pid, 0.165f, 0.0f, 0.2f, 0.0f, 7, 0.1);
     PID_Set(&Gimbal.small_yaw.small_yaw_speed_pid, 65.0f, 0.01f, 3.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, GIMBALMOTOR_MAX_CURRENT);
     PID_Set(&Gimbal.pitch.pitch_auto_speed_pid, 0.165f, 0, 0.2, 0.0f, 7, 0.1);
-    PID_Set(&Gimbal.small_yaw.small_yaw_auto_speed_pid, 85.0f, 0.01f, 3.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, GIMBALMOTOR_MAX_CURRENT);
+    PID_Set(&Gimbal.small_yaw.small_yaw_auto_speed_pid, 90.0f, 0.01f, 3.0f, 0.0f, GIMBALMOTOR_MAX_CURRENT, GIMBALMOTOR_MAX_CURRENT);
     /*PID位置环初始化*/
     // 遥控
     PID_Set(&Gimbal.pitch.pitch_location_pid, 16.0f, 0.0f, 10.0f, 0.0f, 12.57, 1000);

@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-15 03:52:44
+ * @LastEditTime: 2026-05-18 23:35:59
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -303,7 +303,7 @@ void Mode_Switch()
         {
             Global.Chassis.input.x = Navigation_receive_1.x_speed ;
             Global.Chassis.input.y = Navigation_receive_1.y_speed ;
-            Global.Chassis.input.r = 0 * RPM_TO_RAD_S;//60 * RPM_TO_RAD_S;
+            Global.Chassis.input.r = 30 * RPM_TO_RAD_S;//60 * RPM_TO_RAD_S;
         }
         else
         {
@@ -317,9 +317,9 @@ void Mode_Switch()
 
                             // 掉血后一段时间内高速，否则低速
                             if ((HAL_GetTick() - hurt_tick) < hurt_high_duration_ms)
-                                Global.Chassis.input.r = Variable_Spin_Update();
+                                Global.Chassis.input.r = -Variable_Spin_Update();
                             else
-                                Global.Chassis.input.r = 60 * RPM_TO_RAD_S;
+                                Global.Chassis.input.r = -60 * RPM_TO_RAD_S;
                         }
                         else
                         {

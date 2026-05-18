@@ -58,7 +58,7 @@ typedef struct
 
     /*-------目标量-------*/
     enum trigger_speed_e trigger_speed_set;
-    enum shoot_speed_e shoot_speed_set;
+    float shoot_speed_set;  // 摩擦轮目标转速（含自适应偏移）
     float current[3];  // 电流
 
 }Shoot_t;

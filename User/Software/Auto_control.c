@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-16 08:56:51
+ * @LastEditTime: 2026-05-17 00:55:26
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -41,7 +41,7 @@ volatile uint32_t relative_timeout_ms = 8;
 volatile uint32_t relative_tick = 0;
 volatile uint32_t relative_lost = 0;
 volatile uint8_t  relative_seq = 0;
-float aa_big_yaw_ff_gain = 1.0f;
+float aa_big_yaw_ff_gain = 0.0f;
 float aa_big_yaw_ff_max_deg_s = 120.0f;
 
 uint8_t RelativeAngle_IsFresh(void)
@@ -272,7 +272,7 @@ void STM32_to_MINIPC()
 {
     toMINIPC.header[0] = 'S';
     toMINIPC.header[1] = 'P';
-    toMINIPC.mode = MODE_SMALL_BUFF;
+    toMINIPC.mode = MODE_AUTO_AIM;
     toMINIPC.yaw = degree2rad(imu_gimbal.yaw);//IMU_data.AHRS.yaw;
     toMINIPC.pitch = degree2rad(imu_gimbal.pitch);//IMU_data.AHRS.pitch;
     toMINIPC.yaw_vel = imu_gimbal.gyro[2];//IMU_data.gyro[2];
@@ -370,7 +370,7 @@ static void Auto_Control(void)
  */
 static void Scan_Internal(void)
 {
-    const float PITCH_MAX = PITCHI_MAX_ANGLE;
+    const float PITCH_MAX = 10;//PITCHI_MAX_ANGLE;
     const float PITCH_MIN = PITCHI_MIN_ANGLE;
     float small_yaw_relative_now = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     /* ≥ı ºÕ¨≤Ω */

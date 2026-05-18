@@ -20,6 +20,7 @@
 #include "referee_system.h"
 #include "User_math.h"
 #include "Auto_control.h"
+#include "shoot_speed_adapt.h"
 
 Shoot_t Shoot;
 
@@ -44,6 +45,9 @@ void Shoot_Init()
 	// 摩擦轮电机
 	PID_Set(&Shoot.shoot_L_speed_pid, 10, 0, 0, 0.0f, SHOOTMOTOR_MAX_CURRENT, 0);
 	PID_Set(&Shoot.shoot_R_speed_pid, 10, 0, 0, 0.0f, SHOOTMOTOR_MAX_CURRENT, 0);
+
+	// 射速自适应初始化（从Flash恢复偏移量）
+	ShootSpeedAdapt_Init();
 
 }
 
@@ -81,7 +85,7 @@ else {
             Global.Shoot.shoot_status = NOK;
             break;
         case READY:
-            Shoot.shoot_speed_set = SHOOT_SPEED_READY;
+            Shoot.shoot_speed_set = SHOOT_SPEED_READY + ShootSpeedAdapt_GetOffset();
             {
                 const float shoot_speed_l_target = (float)SHOOT_SPEED_READY;
                 const float shoot_speed_r_target = -(float)SHOOT_SPEED_READY;
@@ -183,6 +187,8 @@ void Shoot_Controller()
 void Shoot_Tasks(void)
 {
 #if (USE_SHOOT != 0)
+	// 射速自适应更新（检测新弹并动态调整偏移）
+	// ShootSpeedAdapt_Update();
 	// 发射机构数据更新 (摩擦轮达速检测)
 	Shoot_Updater();
 	// 开火仲裁 (唯一写 trigger_mode 的地方)
