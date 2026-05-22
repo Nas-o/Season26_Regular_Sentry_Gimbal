@@ -1,7 +1,7 @@
 /*
  * @Date: 2025-10-24 19:37:34
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-04-18 14:54:06
+ * @LastEditTime: 2026-05-21 02:38:47
  * @FilePath: \Season26_Regular_Sentry_Gimbal\Core\Src\freertos.c
  */
 /* USER CODE BEGIN Header */

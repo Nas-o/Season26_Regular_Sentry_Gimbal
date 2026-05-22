@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-17 00:55:26
+ * @LastEditTime: 2026-05-21 05:56:37
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
  */
 
@@ -182,7 +182,7 @@ void Navigation_Send_Message()
     stm32send_1.is_fire = Global.Shoot.trigger_mode;
     //stm32send_1.distance = fromMINIPC.distance;
 
-    static uint8_t buff[sizeof(STM32ROS_data_t) + 3];
+     static uint8_t buff[sizeof(STM32ROS_data_t) + 3];
     buff[0] = 0xA5;
     memcpy(&buff[1], &stm32send_1, sizeof(STM32ROS_data_t));
     append_CRC16_check_sum(buff, sizeof(buff));
@@ -272,7 +272,7 @@ void STM32_to_MINIPC()
 {
     toMINIPC.header[0] = 'S';
     toMINIPC.header[1] = 'P';
-    toMINIPC.mode = MODE_AUTO_AIM;
+    toMINIPC.mode =  MODE_AUTO_AIM;
     toMINIPC.yaw = degree2rad(imu_gimbal.yaw);//IMU_data.AHRS.yaw;
     toMINIPC.pitch = degree2rad(imu_gimbal.pitch);//IMU_data.AHRS.pitch;
     toMINIPC.yaw_vel = imu_gimbal.gyro[2];//IMU_data.gyro[2];
@@ -370,7 +370,7 @@ static void Auto_Control(void)
  */
 static void Scan_Internal(void)
 {
-    const float PITCH_MAX = 10;//PITCHI_MAX_ANGLE;
+    const float PITCH_MAX = 20.0f;
     const float PITCH_MIN = PITCHI_MIN_ANGLE;
     float small_yaw_relative_now = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     /* 初始同步 */
@@ -402,18 +402,18 @@ static void Scan_Internal(void)
     /* 小Yaw扫描：直接速度控制 */
     AA.scan_offset = small_yaw_relative_now;
     float scan_yaw_speed_deg_s = 0.0f;
-    if (toMINIPC.mode == MODE_AUTO_AIM)
-    {
+/*     if (toMINIPC.mode == MODE_AUTO_AIM)
+    { */
         if (small_yaw_relative_now >= aa_scan_yaw_limit_deg)
             AA.scan_yaw_dir = -1;
         else if (small_yaw_relative_now <= -aa_scan_yaw_limit_deg)
             AA.scan_yaw_dir = 1;
         scan_yaw_speed_deg_s = aa_scan_yaw_speed_deg_s;
-    }
+/*     }
     else
     {
         AA.scan_yaw_dir = 0;
-    }
+    } */
     
 
     Gimbal.small_yaw.small_yaw_speed_set = AA.scan_yaw_dir * scan_yaw_speed_deg_s;

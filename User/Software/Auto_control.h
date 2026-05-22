@@ -251,7 +251,12 @@ typedef struct
     uint16_t base_HP;
     uint32_t rfid_status;
     uint32_t initial_speed;
+    
+    uint32_t last_update_tick;  // 最后一次收到CAN帧的时间戳 (ms)
+    uint8_t  online;            // 在线标志: 1=在线, 0=离线/超时
 }Referee_data_t;
+
+#define REFEREE_CAN_TIMEOUT_MS  200  // 裁判系统CAN数据超时阈值(ms)
 
 /**
  * @brief 自瞄状态机 — 上位机 mode 决策, 下位机只做链路保底+执行

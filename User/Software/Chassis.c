@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-18 23:35:59
+ * @LastEditTime: 2026-05-22 11:52:27
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Chassis.c
  */
 
@@ -203,8 +203,8 @@ float Variable_Spin_Update(void)
     /* ---- 可调参数 (RPM) ---- */
     #define VSPIN_LOW_MIN_RPM    60.0f     /* 低速段下限 RPM    */
     #define VSPIN_LOW_MAX_RPM    70.0f     /* 低速段上限 RPM    */
-    #define VSPIN_HIGH_MIN_RPM   90.0f    /* 高速段下限 RPM    */
-    #define VSPIN_HIGH_MAX_RPM   105.0f    /* 高速段上限 RPM    */
+    #define VSPIN_HIGH_MIN_RPM   85.0f    /* 高速段下限 RPM    */
+    #define VSPIN_HIGH_MAX_RPM   95.0f    /* 高速段上限 RPM    */
     #define VSPIN_HOLD_MIN_MS    300       /* 最短保持时间 ms   */
     #define VSPIN_HOLD_MAX_MS    800       /* 最长保持时间 ms   */
 
@@ -303,7 +303,15 @@ void Mode_Switch()
         {
             Global.Chassis.input.x = Navigation_receive_1.x_speed ;
             Global.Chassis.input.y = Navigation_receive_1.y_speed ;
-            Global.Chassis.input.r = 30 * RPM_TO_RAD_S;//60 * RPM_TO_RAD_S;
+            if(Navigation_receive_1.region_code == 11)
+            {
+                Global.Chassis.input.r = 60 * RPM_TO_RAD_S;
+            }
+            else
+            {
+                Global.Chassis.input.r = 0;
+            }
+            
         }
         else
         {
@@ -319,7 +327,7 @@ void Mode_Switch()
                             if ((HAL_GetTick() - hurt_tick) < hurt_high_duration_ms)
                                 Global.Chassis.input.r = -Variable_Spin_Update();
                             else
-                                Global.Chassis.input.r = -60 * RPM_TO_RAD_S;
+                                Global.Chassis.input.r = -50 * RPM_TO_RAD_S;
                         }
                         else
                         {

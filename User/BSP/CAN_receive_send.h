@@ -2,7 +2,7 @@
  * @Author: hao hao@qlu.edu.cn
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-03-24 16:04:48
+ * @LastEditTime: 2026-05-21 03:57:47
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\BSP\CAN_receive_send.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -31,10 +31,10 @@ extern void HAL_FDCAN_ErrorCallback(FDCAN_HandleTypeDef *hfdcan);
 #define CAN_ID_CHASSIS_IMU_GYRO      0x106
 #define CAN_ID_GIMBAL_RELATIVE_ANGLE 0x107
 #define CAN_ID_SHOOT_TRIGGER_MODE    0x108
-#define CAN_ID_REFEREE_DATA_1        0x109
-#define CAN_ID_REFEREE_DATA_2        0x10A
-#define CAN_ID_REFEREE_DATA_3        0x10B
-#define CAN_ID_SALTATION_MODE        0x10C
+#define CAN_ID_REFEREE_DATA_1        0x091
+#define CAN_ID_REFEREE_DATA_2        0x092
+#define CAN_ID_REFEREE_DATA_3        0x093
+#define CAN_ID_SALTATION_MODE        0x109
 
 /* CAN 接收路由表类型 */
 typedef void (*CanRxHandler_t)(uint8_t data[8]);
