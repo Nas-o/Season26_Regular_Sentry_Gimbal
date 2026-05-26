@@ -32,7 +32,7 @@
 #ifndef MATH_HELPER_H
 #define MATH_HELPER_H
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 float arm_snr_f32(float *pRef, float *pTest,  uint32_t buffSize);
 double arm_snr_f64(double *pRef, double *pTest,  uint32_t buffSize);

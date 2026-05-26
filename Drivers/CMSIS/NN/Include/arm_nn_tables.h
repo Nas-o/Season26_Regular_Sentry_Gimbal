@@ -29,7 +29,7 @@
 #ifndef _ARM_NN_TABLES_H
 #define _ARM_NN_TABLES_H
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 /**
 * @brief tables for various activation functions

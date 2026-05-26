@@ -1,5 +1,5 @@
 #include "transform_test_data.h"
-#include "arm_const_structs.h"
+#include "arm_const_structs.hpp"
 
 /*--------------------------------------------------------------------------------*/
 /* Input/Output Buffers */

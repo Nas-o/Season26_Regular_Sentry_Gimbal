@@ -1,4 +1,4 @@
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "matrix_test_data.h"
 #include "type_abbrev.h"
 

@@ -22,8 +22,8 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-#include "USB_VirCom.h"
-#include "fifo.h"
+#include "USB_VirCom.hpp"
+#include "fifo.hpp"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/

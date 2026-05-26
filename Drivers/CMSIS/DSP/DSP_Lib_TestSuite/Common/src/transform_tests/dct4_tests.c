@@ -1,6 +1,6 @@
 #include "jtest.h"
 #include "ref.h"
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "arr_desc.h"
 #include "transform_templates.h"
 #include "transform_test_data.h"

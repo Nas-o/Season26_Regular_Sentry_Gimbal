@@ -29,7 +29,7 @@
 #ifndef _ARM_COMMON_TABLES_H
 #define _ARM_COMMON_TABLES_H
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 #if !defined(ARM_DSP_CONFIG_TABLES) || defined(ARM_FFT_ALLOW_TABLES) 
 

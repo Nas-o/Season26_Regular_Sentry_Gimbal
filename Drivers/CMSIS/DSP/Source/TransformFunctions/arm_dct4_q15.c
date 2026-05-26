@@ -26,7 +26,7 @@
  * limitations under the License.
  */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 /**
   @addtogroup DCT4_IDCT4

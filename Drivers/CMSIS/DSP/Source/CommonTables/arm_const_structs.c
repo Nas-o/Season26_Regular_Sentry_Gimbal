@@ -27,7 +27,7 @@
  * limitations under the License.
  */
 
-#include "arm_const_structs.h"
+#include "arm_const_structs.hpp"
 
 #if !defined(ARM_DSP_CONFIG_TABLES) || defined(ARM_FFT_ALLOW_TABLES) 
 

@@ -26,7 +26,7 @@
  * limitations under the License.
  */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 #if defined(ARM_MATH_NEON)
 #include <limits.h>
 #endif

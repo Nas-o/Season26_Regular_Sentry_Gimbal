@@ -106,7 +106,7 @@
 /** \example arm_signal_converge_example_f32.c
   */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "math_helper.h"
 
 /* ----------------------------------------------------------------------

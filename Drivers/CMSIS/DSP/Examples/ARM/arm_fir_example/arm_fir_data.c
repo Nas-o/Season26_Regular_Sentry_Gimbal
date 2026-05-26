@@ -38,7 +38,7 @@
 * POSSIBILITY OF SUCH DAMAGE.  
  * -------------------------------------------------------------------- */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 /* ----------------------------------------------------------------------
 ** Test input signal contains 1000Hz + 15000 Hz

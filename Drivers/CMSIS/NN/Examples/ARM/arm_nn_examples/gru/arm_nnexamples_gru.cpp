@@ -96,7 +96,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "arm_nnexamples_gru_test_data.h"
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "arm_nnfunctions.h"
 
 #ifdef _RTE_

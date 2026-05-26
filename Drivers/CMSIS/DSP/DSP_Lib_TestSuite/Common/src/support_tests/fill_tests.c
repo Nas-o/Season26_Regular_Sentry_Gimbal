@@ -1,7 +1,7 @@
 #include "jtest.h"
 #include "support_test_data.h"
 #include "arr_desc.h"
-#include "arm_math.h"           /* FUTs */
+#include "arm_math.hpp"           /* FUTs */
 #include "ref.h"                /* Reference Functions */
 #include "test_templates.h"
 #include "support_templates.h"

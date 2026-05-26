@@ -26,7 +26,7 @@
  * limitations under the License.
  */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 void stage_rfft_f32(
   const arm_rfft_fast_instance_f32 * S,

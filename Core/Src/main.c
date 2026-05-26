@@ -32,26 +32,26 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "UART_data_txrx.h"
-#include "CAN_receive_send.h"
+#include "UART_data_txrx.hpp"
+#include "CAN_receive_send.hpp"
 
-#include "motor.h"
-#include "supercup.h"
-#include "vofa+.h"
+#include "motor.hpp"
+#include "supercup.hpp"
+#include "vofa+.hpp"
 /* #include "IMU_updata.h" */
-#include "dm_imu.h"
-#include "HI12.h"
-#include "LED.h"
-#include "Power_switch.h"
-#include "referee_system.h"
+#include "dm_imu.hpp"
+#include "HI12.hpp"
+#include "LED.hpp"
+#include "Power_switch.hpp"
+#include "referee_system.hpp"
 
 
-#include "music.h"
-#include "Chassis.h"
-#include "Gimbal.h"
-#include "shoot.h"
-#include "Auto_control.h"
-#include "Global_status.h"
+#include "music.hpp"
+#include "Chassis.hpp"
+#include "Gimbal.hpp"
+#include "Shoot.hpp"
+#include "Auto_control.hpp"
+#include "Global_status.hpp"
 
 
 /* USER CODE END Includes */

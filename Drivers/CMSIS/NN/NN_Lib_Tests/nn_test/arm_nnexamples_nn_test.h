@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 #include "arm_nnfunctions.h"
 #include "ref_functions.h"

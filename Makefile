@@ -35,15 +35,33 @@ BUILD_DIR = build
 
 # source
 # 公共包含路径
-COMMON_SOURCES = \
-    $(wildcard User/Algorithm/*.c) \
-    $(wildcard User/BSP/*.c) \
-    $(wildcard User/Hardware/*.c) \
-	$(wildcard User/Hardware/IMU/*.c) \
-	$(wildcard User/Hardware/Motor/*.c) \
-	$(wildcard User/Hardware/Remote/*.c) \
-    $(wildcard User/Software/*.c) \
-	$(wildcard User/System/*.c)
+USER_C_SOURCES =
+
+USER_CPP_SOURCES = \
+    $(wildcard User/Algorithm/*.cpp) \
+    $(wildcard User/Algorithm/*.cc) \
+    $(wildcard User/Algorithm/*.cxx) \
+    $(wildcard User/BSP/*.cpp) \
+    $(wildcard User/BSP/*.cc) \
+    $(wildcard User/BSP/*.cxx) \
+    $(wildcard User/Hardware/*.cpp) \
+    $(wildcard User/Hardware/*.cc) \
+    $(wildcard User/Hardware/*.cxx) \
+	$(wildcard User/Hardware/IMU/*.cpp) \
+	$(wildcard User/Hardware/IMU/*.cc) \
+	$(wildcard User/Hardware/IMU/*.cxx) \
+	$(wildcard User/Hardware/Motor/*.cpp) \
+	$(wildcard User/Hardware/Motor/*.cc) \
+	$(wildcard User/Hardware/Motor/*.cxx) \
+	$(wildcard User/Hardware/Remote/*.cpp) \
+	$(wildcard User/Hardware/Remote/*.cc) \
+	$(wildcard User/Hardware/Remote/*.cxx) \
+    $(wildcard User/Software/*.cpp) \
+    $(wildcard User/Software/*.cc) \
+    $(wildcard User/Software/*.cxx) \
+	$(wildcard User/System/*.cpp) \
+	$(wildcard User/System/*.cc) \
+	$(wildcard User/System/*.cxx)
 
 ######################################
 # C sources
@@ -121,6 +139,15 @@ Drivers/Chip/w25q64/w25q64.c \
 ASM_SOURCES =  \
 startup_stm32h723xx.s
 
+# C++ sources
+CPP_SOURCES = $(filter %.cpp,$(USER_CPP_SOURCES))
+
+# C++ sources
+CC_SOURCES = $(filter %.cc,$(USER_CPP_SOURCES))
+
+# C++ sources
+CXX_SOURCES = $(filter %.cxx,$(USER_CPP_SOURCES))
+
 # ASM sources
 ASMM_SOURCES = 
 
@@ -133,11 +160,13 @@ PREFIX = arm-none-eabi-
 # either it can be added to the PATH environment variable.
 ifdef GCC_PATH
 CC = $(GCC_PATH)/$(PREFIX)gcc
+CXX = $(GCC_PATH)/$(PREFIX)g++
 AS = $(GCC_PATH)/$(PREFIX)gcc -x assembler-with-cpp
 CP = $(GCC_PATH)/$(PREFIX)objcopy
 SZ = $(GCC_PATH)/$(PREFIX)size
 else
 CC = $(PREFIX)gcc
+CXX = $(PREFIX)g++
 AS = $(PREFIX)gcc -x assembler-with-cpp
 CP = $(PREFIX)objcopy
 SZ = $(PREFIX)size
@@ -218,7 +247,6 @@ C_INCLUDES =  \
 -IDrivers/Chip/w25q64 \
 -IDrivers/CMSIS/Include \
 # 合并到主配置
-C_SOURCES +=  $(COMMON_SOURCES)
 C_INCLUDES += $(COMMON_INCLUDES) 
 AS_INCLUDES += $(COMMON_INCLUDES)
 
@@ -226,14 +254,17 @@ AS_INCLUDES += $(COMMON_INCLUDES)
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
 
 CFLAGS += $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
+CXXFLAGS += $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections -std=gnu++14 -fno-exceptions -fno-rtti -fno-use-cxa-atexit -fno-threadsafe-statics
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g -gdwarf-2
+CXXFLAGS += -g -gdwarf-2
 endif
 
 
 # Generate dependency information
 CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
+CXXFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
 
 
 #######################################
@@ -257,6 +288,12 @@ all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET
 # list of objects
 OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
 vpath %.c $(sort $(dir $(C_SOURCES)))
+OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(CPP_SOURCES:.cpp=.o)))
+vpath %.cpp $(sort $(dir $(CPP_SOURCES)))
+OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(CC_SOURCES:.cc=.o)))
+vpath %.cc $(sort $(dir $(CC_SOURCES)))
+OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(CXX_SOURCES:.cxx=.o)))
+vpath %.cxx $(sort $(dir $(CXX_SOURCES)))
 # list of ASM program objects
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
@@ -266,13 +303,22 @@ vpath %.S $(sort $(dir $(ASMM_SOURCES)))
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
 	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
 
+$(BUILD_DIR)/%.o: %.cpp Makefile | $(BUILD_DIR)
+	$(CXX) -c $(CXXFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.cpp=.lst)) $< -o $@
+
+$(BUILD_DIR)/%.o: %.cc Makefile | $(BUILD_DIR)
+	$(CXX) -c $(CXXFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.cc=.lst)) $< -o $@
+
+$(BUILD_DIR)/%.o: %.cxx Makefile | $(BUILD_DIR)
+	$(CXX) -c $(CXXFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.cxx=.lst)) $< -o $@
+
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
 	$(AS) -c $(CFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.S Makefile | $(BUILD_DIR)
 	$(AS) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile
-	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
+	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
 	$(SZ) $@
 
 $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
@@ -288,7 +334,7 @@ $(BUILD_DIR):
 # clean up
 #######################################
 clean:
-	-rm -fR $(BUILD_DIR)
+	-cmd /c "if exist $(BUILD_DIR) rmdir /s /q $(BUILD_DIR)"
   
 #######################################
 # dependencies

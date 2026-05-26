@@ -1,4 +1,9 @@
 #ifndef BMI088REG_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BMI088REG_H
 
 #define BMI088_ACC_CHIP_ID 0x00 // the register is  " Who am I "
@@ -177,4 +182,8 @@
 #define BMI088_GYRO_TRIG_BIST_SHFITS 0x0
 #define BMI088_GYRO_TRIG_BIST (0x1 << BMI088_GYRO_TRIG_BIST_SHFITS)
 
+
+#ifdef __cplusplus
+}
+#endif
 #endif

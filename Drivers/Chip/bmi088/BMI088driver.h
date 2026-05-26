@@ -1,7 +1,12 @@
 #ifndef BMI088DRIVER_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BMI088DRIVER_H
 
-#include "struct_typedef.h"
+#include "struct_typedef.hpp"
 #include "main.h"
 
 #define BMI088_TEMP_FACTOR 0.125f
@@ -98,4 +103,8 @@ extern void BMI088_read(fp32 gyro[3], fp32 accel[3], fp32 *temperate);
 
 
 
+
+#ifdef __cplusplus
+}
+#endif
 #endif

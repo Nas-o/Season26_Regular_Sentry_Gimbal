@@ -88,7 +88,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "arm_nnexamples_cifar10_parameter.h"
 #include "arm_nnexamples_cifar10_weights.h"
 

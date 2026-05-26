@@ -1,7 +1,12 @@
 #ifndef BMI088MIDDLEWARE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BMI088MIDDLEWARE_H
 
-#include "struct_typedef.h"
+#include "struct_typedef.hpp"
 
 #define BMI088_USE_SPI
 //#define BMI088_USE_IIC
@@ -24,4 +29,8 @@ extern uint8_t BMI088_read_write_byte(uint8_t reg);
 
 #endif
 
+
+#ifdef __cplusplus
+}
+#endif
 #endif

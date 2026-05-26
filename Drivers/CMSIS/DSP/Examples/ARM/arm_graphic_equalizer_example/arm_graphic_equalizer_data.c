@@ -38,7 +38,7 @@
 * POSSIBILITY OF SUCH DAMAGE.  
  * -------------------------------------------------------------------- */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 float32_t testRefOutput_f32[320] = {
 

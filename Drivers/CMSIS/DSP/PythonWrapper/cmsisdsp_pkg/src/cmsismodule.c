@@ -40,7 +40,7 @@
 
 
 #ifdef CMSISDSP
-#include "arm_math.h"
+#include "arm_math.hpp"
 #define MODNAME "cmsisdsp"
 #define MODINITNAME cmsisdsp
 #endif 

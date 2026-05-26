@@ -27,7 +27,7 @@
  * Target Processor:  Cortex-M cores
  *
  * -------------------------------------------------------------------- */
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "arm_nnfunctions.h"
 
 /**

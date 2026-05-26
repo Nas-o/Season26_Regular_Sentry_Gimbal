@@ -40,7 +40,7 @@
 * -------------------------------------------------------------------- */
 
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 #ifndef MATH_HELPER_H
 #define MATH_HELPER_H

@@ -32,27 +32,27 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "remote_control.h"
-#include "Chassis.h"
-#include "Gimbal.h"
-#include "Global_status.h"
-#include "Auto_control.h"
-#include "shoot.h"
-#include "music.h"
+#include "remote_control.hpp"
+#include "Chassis.hpp"
+#include "Gimbal.hpp"
+#include "Global_status.hpp"
+#include "Auto_control.hpp"
+#include "Shoot.hpp"
+#include "music.hpp"
 
-#include "dm_imu.h"
+#include "dm_imu.hpp"
 #include <math.h>
 
-#include "referee_system.h"
-#include "supercup.h"
-#include "LED.h"
-#include "DT7.h"
-#include "VT13.h"
-#include "motor.h"
+#include "referee_system.hpp"
+#include "supercup.hpp"
+#include "LED.hpp"
+#include "DT7.hpp"
+#include "VT13.hpp"
+#include "motor.hpp"
 #include <cmsis_os2.h>
 
 #include "iwdg.h"
-#include "buzzer.h"
+#include "buzzer.hpp"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

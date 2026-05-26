@@ -1,5 +1,5 @@
 #include "ref.h"	
-#include "arm_const_structs.h"
+#include "arm_const_structs.hpp"
 	
 void ref_rfft_f32(
 	arm_rfft_instance_f32 * S,

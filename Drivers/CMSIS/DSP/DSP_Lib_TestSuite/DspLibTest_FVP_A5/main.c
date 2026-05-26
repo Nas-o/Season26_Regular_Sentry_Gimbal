@@ -21,7 +21,7 @@
 
 #include "jtest.h"
 #include "all_tests.h"
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 
 int main (void) {

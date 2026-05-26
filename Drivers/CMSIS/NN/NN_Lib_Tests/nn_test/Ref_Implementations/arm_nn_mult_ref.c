@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "arm_nnfunctions.h"
 
 void      arm_nn_mult_q7_ref(q7_t * pSrcA, 

@@ -26,7 +26,7 @@
  * limitations under the License.
  */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 extern void arm_radix4_butterfly_q31(
         q31_t * pSrc,

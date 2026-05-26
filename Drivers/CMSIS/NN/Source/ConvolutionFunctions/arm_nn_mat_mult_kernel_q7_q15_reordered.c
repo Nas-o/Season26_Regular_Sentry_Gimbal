@@ -28,7 +28,7 @@
  * -------------------------------------------------------------------- */
 
 #include "arm_nnfunctions.h"
-#include "arm_math.h"
+#include "arm_math.hpp"
 
   /**
    * @brief Matrix-multiplication function for convolution with reordered columns

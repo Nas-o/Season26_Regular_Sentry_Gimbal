@@ -1,4 +1,4 @@
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "support_test_data.h"
 
 #define MAX_INPUT_ELEMENTS 32

@@ -1,4 +1,9 @@
 #ifndef __W25Q64_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define __W25Q64_H__
 
 #include "main.h"
@@ -59,4 +64,8 @@ int8_t OSPI_W25Qxx_Test(void); //flash∂¡–¥≤‚ ‘
 
 
 
+
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -25,9 +25,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "arm_math.h"
-#include "arm_common_tables.h"
-#include "arm_const_structs.h"
+#include "arm_math.hpp"
+#include "arm_common_tables.hpp"
+#include "arm_const_structs.hpp"
 
 #define FFTINIT(SIZE)                                           \
   S->bitRevLength = arm_cfft_sR_f32_len##SIZE.bitRevLength;        \

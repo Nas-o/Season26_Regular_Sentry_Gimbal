@@ -38,7 +38,7 @@
 * POSSIBILITY OF SUCH DAMAGE.  
  * -------------------------------------------------------------------- */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 /* ----------------------------------------------------------------------
 Test Input signal contains 10KHz signal + Uniformly distributed white noise

@@ -1,6 +1,6 @@
 #include "jtest.h"
 #include "all_tests.h"
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 
 #if defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050) && !defined (__MICROLIB)

@@ -27,7 +27,7 @@
  * limitations under the License.
  */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 
 void arm_radix4_butterfly_q15(

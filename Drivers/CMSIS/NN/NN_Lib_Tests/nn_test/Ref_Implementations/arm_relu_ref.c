@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "arm_nnfunctions.h"
 
 void arm_relu_q7_ref(q7_t * data, uint16_t size)

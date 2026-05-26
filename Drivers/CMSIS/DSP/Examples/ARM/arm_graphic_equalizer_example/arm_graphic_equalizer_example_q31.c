@@ -126,7 +126,7 @@
  */
 
 
-#include "arm_math.h"
+#include "arm_math.hpp"
 #include "math_helper.h"
 
 /* Length of the overall data in the test */

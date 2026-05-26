@@ -4,7 +4,7 @@
 
 #include <math.h>
 #include <stdint.h>
-#include "arm_math.h"
+#include "arm_math.hpp"
 
 #ifdef	__cplusplus
 extern "C"
