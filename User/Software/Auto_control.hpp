@@ -315,7 +315,6 @@ void MINIPC_to_STM32(void);
 void MINIPC_SyncShadowToWorkingCopy(void);
 void Navigation_Send_Message(void);
 uint8_t decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned int len);
-uint8_t Gimbal_CAN_Dispatch(uint16_t id, uint8_t data[8]);
 uint8_t RelativeAngle_IsFresh(void);
 
 /* ---- 自瞄总入口 (freertos.c 每1ms调一次) ---- */

@@ -10,12 +10,10 @@
  */
 // #include "cover_headerfile_h.h"
 #include "CAN_receive_send.hpp"
+#include "BoardLink.hpp"
 #include "motor.hpp"
 #include "dm_imu.hpp"
 #include "supercup.hpp"
-#include "Gimbal.hpp"
-#include "Chassis.hpp"
-#include "Auto_control.hpp"
 
 // CAN寄存器及控制器
 extern FDCAN_HandleTypeDef hfdcan1;
@@ -129,7 +127,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
   {
     HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rx_header, rx_data);
 	 
-    if (Gimbal_CAN_Dispatch(rx_header.Identifier, rx_data))
+    if (BoardLink_RxDispatch(hfdcan, (uint16_t)rx_header.Identifier, rx_data))
     return;  // 双板消息处理完即退出，不再走电机解码
     // 超电帧
     if ((rx_header.Identifier == Supercap_receive_id) ||

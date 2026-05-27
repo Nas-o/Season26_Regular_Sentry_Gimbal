@@ -111,58 +111,6 @@ uint8_t decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned 
     return 0; // CRC 校验失败
 }
 
-static void Receive_RefereeData1(uint8_t data[8])
-{
-    Referee.current_HP = bytes_to_uint16(&data[0]);
-    Referee.maximum_HP = bytes_to_uint16(&data[2]);
-    Referee.game_type = bytes_to_uint8(&data[4]);
-    Referee.game_progress = bytes_to_uint8(&data[5]);
-    Referee.stage_remain_time = bytes_to_uint16(&data[6]);
-}
-
-static void Receive_RefereeData2(uint8_t data[8])
-{
-    Referee.projectile_allowance_17mm = bytes_to_uint16(&data[0]);
-    Referee.outpost_HP = bytes_to_uint16(&data[2]);
-    Referee.base_HP = bytes_to_uint16(&data[4]);
-    Referee.launching_frequency = bytes_to_uint8(&data[6]);
-}
-
-static void Receive_RefereeData3(uint8_t data[8])
-{
-    Referee.rfid_status = bytes_to_float(&data[0]);
-    Referee.initial_speed = bytes_to_float(&data[4]);
-}
-
-static void Receive_RelativeAngle(uint8_t data[8])
-{
-    // 直接解析两个 float
-    relative_angle = bytes_to_float(&data[0]);
-    Gimbal.small_yaw.small_from_big_feedforward = bytes_to_float(&data[4]); // 如果需要速度的话
-  
-    relative_tick = HAL_GetTick();
-}
-
-static const CanRxEntry_t GimbalRxTable[] = {
-    { CAN_ID_GIMBAL_RELATIVE_ANGLE,     Receive_RelativeAngle  },
-    { CAN_ID_REFEREE_DATA_1,            Receive_RefereeData1   },
-    { CAN_ID_REFEREE_DATA_2,            Receive_RefereeData2   },
-    { CAN_ID_REFEREE_DATA_3,            Receive_RefereeData3   },
-
-};
-
-uint8_t Gimbal_CAN_Dispatch(uint16_t id, uint8_t data[8])
-{
-    for (uint8_t i = 0; i < sizeof(GimbalRxTable)/sizeof(GimbalRxTable[0]); i++) 
-    {
-        if (GimbalRxTable[i].id == id) 
-        {
-            GimbalRxTable[i].handler(data);
-            return 1;  // 匹配成功
-        }
-    }
-    return 0;  // 未匹配
-}
 /**
  * @brief 向导航发送裁判系统数据
  *

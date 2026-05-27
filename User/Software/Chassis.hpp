@@ -90,6 +90,13 @@ typedef struct
     
 } PowerLimiter_t;
 
+typedef struct
+{
+    float x;
+    float y;
+    float r;
+} ChassisLinkMotion_t;
+
 /*内部数据类型*/
 typedef struct
 {
@@ -209,11 +216,11 @@ typedef struct
     
 }Chassis_t;
 extern Chassis_t Chassis;
+extern ChassisLinkMotion_t ChassisLinkMotion;
 
 /*外部调用*/
 void Chassis_Init();
 void Chassis_Tasks();
-void Chassis_CAN_SendAll(void);
 void Chassis_SetX(float x);
 void Chassis_SetY(float y);
 void Chassis_SetR(float r);

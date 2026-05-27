@@ -44,6 +44,7 @@
 
 
 Chassis_t Chassis ;
+ChassisLinkMotion_t ChassisLinkMotion = {0};
 static fp32 deta[4] = {45.0f, 45.0f, 45.0f, 45.0f};   
 RC_ctrl_t RC_data;
 RampGenerator Vx_ramp, Vy_ramp, Vw_ramp;
@@ -244,7 +245,6 @@ float Variable_Spin_Update(void)
     return current_rad_s;
 }
 
-float X_speed, Y_speed, R_speed;
 /*************************** Mode_Switch *****************************/
 
 /**
@@ -340,9 +340,9 @@ void Mode_Switch()
         sin_beta = sinf(Chassis.relative_angle / 180.0f * PI);
         cos_beta = cosf(Chassis.relative_angle / 180.0f * PI);
 
-        X_speed = -(Global.Chassis.input.x * cos_beta - sin_beta * Global.Chassis.input.y);
-        Y_speed = Global.Chassis.input.x * sin_beta + Global.Chassis.input.y * cos_beta;
-        R_speed = Global.Chassis.input.r;
+        ChassisLinkMotion.x = -(Global.Chassis.input.x * cos_beta - sin_beta * Global.Chassis.input.y);
+        ChassisLinkMotion.y = Global.Chassis.input.x * sin_beta + Global.Chassis.input.y * cos_beta;
+        ChassisLinkMotion.r = Global.Chassis.input.r;
 }
 
 
@@ -403,136 +403,3 @@ void Chassis_SetAccel(float acc)
 
 }
 
-static void Pack_XY_Speed(uint8_t data[8])
-{
-    float_to_bytes(X_speed,                             &data[0]);
-    float_to_bytes(Y_speed,                             &data[4]);
-}
-
-static void Pack_R_Yaw(uint8_t data[8])
-{
-    /* 原子拷贝 relative_angle，防止 CAN ISR 半写导致的 torn read */
-    __disable_irq();
-    float ra = relative_angle;
-    __enable_irq();
-
-    float encoder_relative = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
-    
-    if (AutoAim_ShouldBigYawFollow())
-    {
-        // 自瞄跟踪 或 扫描: 大 yaw 都跟随小 yaw，避免切扫描时大 yaw 目标突变
-        Gimbal.big_yaw.big_yaw_location_set = ra + encoder_relative;
-    }
-    else
-    {
-        // 非自瞄（遥控/导航）
-        Gimbal.big_yaw.big_yaw_location_set = Global.Gimbal.input.yaw; 
-    }
-    
-    float_to_bytes(R_speed,                             &data[0]);
-    float_to_bytes(Gimbal.big_yaw.big_yaw_location_set, &data[4]);
-}
-
-static void Pack_Control_Mode(uint8_t data[8])
-{
-    float_to_bytes(Global.Control.mode,                 &data[0]);
-    float_to_bytes(Global.Chassis.mode,                 &data[4]);
-}
-
-static void Pack_IMU_Attitude(uint8_t data[8])
-{
-    float_to_bytes(imu_chassis.pitch,                   &data[0]);
-    float_to_bytes(imu_chassis.yaw_cnt,                 &data[4]);
-}
-
-static void Pack_IMU_Gyro(uint8_t data[8])
-{
-    float_to_bytes(imu_chassis.gyro[0],                 &data[0]);
-    float_to_bytes(imu_chassis.gyro[2],                 &data[4]);
-}
-
-static void Pack_Saltation_Mode(uint8_t data[8])
-{
-    float_to_bytes(Navigation_receive_1.yaw_speed,      &data[0]);
-    uint8_to_bytes(Navigation_receive_1.running_state,  &data[4]); 
-    uint8_to_bytes(fromMINIPC.mode,                     &data[5]);
-    uint8_to_bytes(AA.is_scanning,                      &data[6]);
-    uint8_to_bytes(Navigation_receive_1.region_code,    &data[7]);
-}
-
-
-static void Pack_TRIGGER_MODE(uint8_t data[8])
-{
-    float_to_bytes(Global.Shoot.trigger_mode,  &data[0]);    
-    float_to_bytes(Global.Auto.mode,           &data[4]);
-}
-
-
-
-/*  分频调度表 —— IMU 源 1kHz(TIM13), 全速发送
- *                                       div  phase
- *  tick:  0   1   2   3   4   5   6   7   8   9
- *  帧数:  5   4   5   4   5   4   4   5   4   5   */
-static const CanTxEntry_t ChassisTxTable[] = {
-    /* 1kHz 速度+IMU: 控制环核心 */
-    { CAN_ID_CHASSIS_SPEED_XY,     Pack_XY_Speed,       1, 0 },
-    { CAN_ID_CHASSIS_SPEED_R_YAW,  Pack_R_Yaw,          1, 0 },
-    { CAN_ID_CHASSIS_IMU_ATTITUDE, Pack_IMU_Attitude,   1, 0 },
-    { CAN_ID_CHASSIS_IMU_GYRO,     Pack_IMU_Gyro,       1, 0 },
-    /* 200Hz 模式/状态, 各自错开 */
-    { CAN_ID_CHASSIS_MODE,         Pack_Control_Mode,   5, 0 },
-    { CAN_ID_SHOOT_TRIGGER_MODE,   Pack_TRIGGER_MODE,   5, 2 },
-    { CAN_ID_SALTATION_MODE,       Pack_Saltation_Mode, 5, 4 },
-};
-
-void Chassis_CAN_SendAll(void)
-{
-    static uint8_t tick = 0;
-    static enum trigger_mode_e last_trigger_mode = TRIGGER_CLOSE;
-    static enum control_mode_e last_control_mode = RC;
-    static enum chassis_mode_e last_chassis_mode = FLOW_Chassis;
-    static enum auto_mode_e    last_auto_mode    = NONE;
-    static uint8_t trigger_mode_fast_resend = 0;
-    static uint8_t mode_fast_resend = 0;
-    uint8_t buf[8];
-
-    if (Global.Shoot.trigger_mode != last_trigger_mode || Global.Auto.mode != last_auto_mode)
-    {
-        last_trigger_mode = Global.Shoot.trigger_mode;
-        last_auto_mode    = Global.Auto.mode;
-        trigger_mode_fast_resend = 5; /* 边沿后连续 5ms 以 1kHz 快速重发 */
-    }
-
-    if (Global.Control.mode != last_control_mode || Global.Chassis.mode != last_chassis_mode)
-    {
-        last_control_mode = Global.Control.mode;
-        last_chassis_mode = Global.Chassis.mode;
-        mode_fast_resend = 5; /* 模式边沿与 trigger 一样快速补发 */
-    }
-
-    for (uint8_t i = 0; i < sizeof(ChassisTxTable)/sizeof(ChassisTxTable[0]); i++) {
-        uint8_t should_send = (tick % ChassisTxTable[i].divider == ChassisTxTable[i].phase);
-
-        if (ChassisTxTable[i].id == CAN_ID_SHOOT_TRIGGER_MODE && trigger_mode_fast_resend > 0) {
-            should_send = 1;
-        }
-        if (ChassisTxTable[i].id == CAN_ID_CHASSIS_MODE && mode_fast_resend > 0) {
-            should_send = 1;
-        }
-
-        if (should_send) {
-            memset(buf, 0, sizeof(buf));
-            ChassisTxTable[i].pack(buf);
-            if (Fdcanx_SendData(&hfdcan2, ChassisTxTable[i].id, buf, 8) == 0) {
-                if (ChassisTxTable[i].id == CAN_ID_SHOOT_TRIGGER_MODE && trigger_mode_fast_resend > 0) {
-                    trigger_mode_fast_resend--;
-                }
-                if (ChassisTxTable[i].id == CAN_ID_CHASSIS_MODE && mode_fast_resend > 0) {
-                    mode_fast_resend--;
-                }
-            }
-        }
-    }
-
-    if (++tick >= 10) tick = 0;  /* LCM(1,2,5)=10, 10ms 一个完整周期 */
-}

@@ -38,6 +38,7 @@
 #include "Global_status.hpp"
 #include "Auto_control.hpp"
 #include "Shoot.hpp"
+#include "BoardLink.hpp"
 #include "music.hpp"
 
 #include "dm_imu.hpp"
@@ -324,7 +325,7 @@ void Chassis_Task(void *argument)
     // {
     //     send_tick = 0;
     // }
-    Chassis_CAN_SendAll();
+    BoardLink_TxStep();
 
     osDelay(1); // ÐÝÏ¢1ms
   }

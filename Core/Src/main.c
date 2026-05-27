@@ -34,6 +34,7 @@
 /* USER CODE BEGIN Includes */
 #include "UART_data_txrx.hpp"
 #include "CAN_receive_send.hpp"
+#include "BoardLink.hpp"
 
 #include "motor.hpp"
 #include "supercup.hpp"
@@ -146,10 +147,11 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
  HAL_IWDG_Refresh(&hiwdg1);
- /*INIT*/
+  /*INIT*/
   Uart_Init();
   HI12_Init(&hfdcan3);
   Can_Init();
+  BoardLink_Init();
   Refree_system_init();
   imu_init(0x01,0x11,&hfdcan1,&imu_gimbal); 
   imu_init(0x02,0x12,&hfdcan3,&imu_chassis);
