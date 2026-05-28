@@ -323,29 +323,29 @@ static void Scan_Internal(void)
     float small_yaw_relative_now = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     /* 初始同步 */
     if (!AA.scan_init_done) {
-        AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pitch_location_now);
+        AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
         AA.scan_offset = 0.0f;
         AA.scan_yaw_dir = -1;
         AA.scan_init_done = 1;
     }
 
-    float phys_now = rad2degree(Gimbal.pitch.pitch_location_now);
+    float phys_now = rad2degree(Gimbal.pitch.pos_now);
 
     /* Pitch 上下扫描 */
-    if (Gimbal.pitch.turnover_pitch == 1) {
+    if (Gimbal.pitch.turnover == 1) {
         AA.scan_pitch_deg += aa_scan_pitch_step_deg;
         if (phys_now >= (PITCH_MAX - 1.0f) || AA.scan_pitch_deg > (PITCH_MAX + 3.0f))
-            Gimbal.pitch.turnover_pitch = 0;
+            Gimbal.pitch.turnover = 0;
     } else {
         AA.scan_pitch_deg -= aa_scan_pitch_step_deg;
         if (phys_now <= (PITCH_MIN + 1.0f) || AA.scan_pitch_deg < (PITCH_MIN - 3.0f))
-            Gimbal.pitch.turnover_pitch = 1;
+            Gimbal.pitch.turnover = 1;
     }
     if (AA.scan_pitch_deg > PITCH_MAX + 3.0f) AA.scan_pitch_deg = PITCH_MAX + 3.0f;
     if (AA.scan_pitch_deg < PITCH_MIN - 3.0f) AA.scan_pitch_deg = PITCH_MIN - 3.0f;
 
     Global.Gimbal.input.pitch = AA.scan_pitch_deg;
-    Gimbal.pitch.pitch_location_set = degree2rad(AA.scan_pitch_deg);
+    Gimbal.pitch.pos_set = degree2rad(AA.scan_pitch_deg);
 
     /* 小Yaw扫描：直接速度控制 */
     AA.scan_offset = small_yaw_relative_now;
@@ -364,14 +364,14 @@ static void Scan_Internal(void)
     } */
     
 
-    Gimbal.small_yaw.small_yaw_speed_set = AA.scan_yaw_dir * scan_yaw_speed_deg_s;
+    Gimbal.yaw.spd_set = AA.scan_yaw_dir * scan_yaw_speed_deg_s;
 
 }
 
 static void Scan_Reset_Internal(void)
 {
     AA.scan_init_done = 0;
-    AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pitch_location_now);
+    AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
     AA.scan_offset    = 0.0f;
     AA.scan_yaw_dir   = 0;
 }
@@ -386,8 +386,8 @@ static void EdgeAction_Update(void)
     if (AA.control_req && !AA.control_req_last) 
     {
         AA.reacquire_freeze = 1;
-        Gimbal.small_yaw.small_yaw_location_set = Gimbal.small_yaw.small_yaw_location_now;
-        Global.Gimbal.input.yaw = Gimbal.small_yaw.small_yaw_location_now;
+        Gimbal.yaw.pos_set = Gimbal.yaw.pos_now;
+        Global.Gimbal.input.yaw = Gimbal.yaw.pos_now;
         Global.Auto.input.yaw_ff = 0;
         Global.Auto.input.pitch_ff = 0;
     }

@@ -66,7 +66,7 @@ void Chassis_Init()
 {
 
     /*底盘跟随PID*/
-    PID_Set(&Chassis.chassis_follow_pid, 0.60f, 0.0f, 0.0f, 0.0f, 120, 40);
+    PID_Set(&Chassis.follow_pid, 0.60f, 0.0f, 0.0f, 0.0f, 120, 40);
     /*底盘功率控制pid*/
 
 
@@ -78,7 +78,7 @@ void Chassis_Init()
     //默认地盘跟随模式
     Global.Chassis.mode = FLOW_Chassis;
 
-    Chassis.random.refresh_interval = 250;
+    Chassis.random.interval = 250;
     srand(HAL_GetTick());
 
 }
@@ -149,24 +149,24 @@ float Random_Spin(float min, float max)
     static int run_count = 0;//计数器，为0更方便看周期
 	run_count++;
 	float target_r;
-	if (run_count >= Chassis.random.refresh_interval) // 判断周期更新
+	if (run_count >= Chassis.random.interval) // 判断周期更新
 	{
-		if (Chassis.random.smaller_than_2_count < 2) // 检查低于底线值的计数
+		if (Chassis.random.low_count < 2) // 检查低于底线值的计数
 		{
-			Chassis.random.valve = Generate_Random_Float(min, max); // 生成随机值
-			if (Chassis.random.valve < 7.0f) // 检查是否低于底线值
+			Chassis.random.value = Generate_Random_Float(min, max); // 生成随机值
+			if (Chassis.random.value < 7.0f) // 检查是否低于底线值
 			{
-				Chassis.random.smaller_than_2_count++;
+				Chassis.random.low_count++;
 			}
 		}
-		else // smaller_than_2_count >= 2，说明已经连续多次低于底线值了
+		else // low_count >= 2，说明已经连续多次低于底线值了
 		{
-			Chassis.random.valve = 9.0f; // 返回固定值，强制提升速度
-			Chassis.random.smaller_than_2_count = 0; // 重置标志位计数
+			Chassis.random.value = 9.0f; // 返回固定值，强制提升速度
+			Chassis.random.low_count = 0; // 重置标志位计数
 		}
 		run_count = 0; // 重置主计数器，开始新周期
 	 }
-	 return Chassis.random.valve;
+	 return Chassis.random.value;
 }
 
 /*********************** Generate_Random_Float ***********************/

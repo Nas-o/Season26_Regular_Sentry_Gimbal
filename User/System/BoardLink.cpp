@@ -121,9 +121,9 @@ void Pack_XY_Speed(uint8_t data[kCanFrameLength])
 
 void Pack_R_Yaw(uint8_t data[kCanFrameLength])
 {
-    Gimbal.big_yaw.big_yaw_location_set = ComputeBigYawSetpoint();
+    Gimbal.big_yaw.pos_set = ComputeBigYawSetpoint();
     StoreFloat(ChassisLinkMotion.r, &data[0]);
-    StoreFloat(Gimbal.big_yaw.big_yaw_location_set, &data[4]);
+    StoreFloat(Gimbal.big_yaw.pos_set, &data[4]);
 }
 
 void Pack_Control_Mode(uint8_t data[kCanFrameLength])
@@ -185,7 +185,7 @@ void Receive_RefereeData3(uint8_t data[kCanFrameLength])
 void Receive_RelativeAngle(uint8_t data[kCanFrameLength])
 {
     relative_angle = LoadFloat(&data[0]);
-    Gimbal.small_yaw.small_from_big_feedforward = LoadFloat(&data[4]);
+    Gimbal.yaw.big_ff = LoadFloat(&data[4]);
     relative_tick = HAL_GetTick();
 }
 
