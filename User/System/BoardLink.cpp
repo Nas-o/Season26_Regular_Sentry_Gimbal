@@ -46,17 +46,6 @@ struct RxFrame
     void (*handle)(uint8_t data[kCanFrameLength]) = nullptr;
 };
 
-struct SchedulerState
-{
-    uint8_t tick = 0;
-    trigger_mode_e last_trigger_mode = TRIGGER_CLOSE;
-    control_mode_e last_control_mode = RC;
-    chassis_mode_e last_chassis_mode = FLOW_Chassis;
-    auto_mode_e last_auto_mode = NONE;
-    uint8_t trigger_mode_fast_resend = 0;
-    uint8_t mode_fast_resend = 0;
-};
-
 inline uint16_t ToRawId(BoardLinkCanId id)
 {
     return static_cast<uint16_t>(id);
@@ -199,6 +188,8 @@ const TxFrame kTxFrames[] = {
     {BoardLinkCanId::SaltationMode, Pack_Saltation_Mode, 5, 4},
 };
 
+constexpr uint8_t kTxFrameCount = sizeof(kTxFrames) / sizeof(kTxFrames[0]);
+
 const RxFrame kRxFrames[] = {
     {BoardLinkCanId::GimbalRelativeAngle, Receive_RelativeAngle},
     {BoardLinkCanId::RefereeData1, Receive_RefereeData1},
@@ -206,87 +197,126 @@ const RxFrame kRxFrames[] = {
     {BoardLinkCanId::RefereeData3, Receive_RefereeData3},
 };
 
-SchedulerState g_scheduler {};
+/* ============== 通用快发机制 ============== */
 
-bool ShouldForceTriggerResend(BoardLinkCanId id)
+uint8_t g_tick = 0;                       // 调度tick计数
+uint8_t g_fast_resend[kTxFrameCount] {};  // 每帧快发剩余拍数
+
+/**
+ * @brief 根据 CAN ID 查找 TxFrame 索引
+ * @return 索引值, 未找到返回 -1
+ */
+int8_t FindTxIndex(uint16_t can_id)
 {
-    return id == BoardLinkCanId::ShootTriggerMode && g_scheduler.trigger_mode_fast_resend > 0;
+    for (uint8_t i = 0; i < kTxFrameCount; i++)
+    {
+        if (ToRawId(kTxFrames[i].id) == can_id)
+            return (int8_t)i;
+    }
+    return -1;
 }
 
-bool ShouldForceModeResend(BoardLinkCanId id)
+/**
+ * @brief 内置边沿检测: 监视离散量, 变化时自动触发快发
+ * @note  每个 EdgeWatch 关联一个 CAN 帧 + 一个 uint32 值
+ *        值变化时自动调用快发, 无需外部介入
+ */
+struct EdgeWatch
 {
-    return id == BoardLinkCanId::ChassisMode && g_scheduler.mode_fast_resend > 0;
-}
+    uint16_t can_id;
+    uint32_t (*sample)(void);  // 采样函数: 返回当前值的压缩表示
+    uint32_t last_value;
+};
 
-void UpdateFastResendState(void)
+// 采样函数: 将关联变量打包为 uint32 以便比较
+uint32_t SampleTriggerMode(void)
 {
-    if (Global.Shoot.trigger_mode != g_scheduler.last_trigger_mode || Global.Auto.mode != g_scheduler.last_auto_mode)
-    {
-        g_scheduler.last_trigger_mode = Global.Shoot.trigger_mode;
-        g_scheduler.last_auto_mode = Global.Auto.mode;
-        g_scheduler.trigger_mode_fast_resend = kFastResendTicks;
-    }
-
-    if (Global.Control.mode != g_scheduler.last_control_mode || Global.Chassis.mode != g_scheduler.last_chassis_mode)
-    {
-        g_scheduler.last_control_mode = Global.Control.mode;
-        g_scheduler.last_chassis_mode = Global.Chassis.mode;
-        g_scheduler.mode_fast_resend = kFastResendTicks;
-    }
+    return ((uint32_t)Global.Shoot.trigger_mode << 16) | (uint32_t)Global.Auto.mode;
 }
 
-void ConsumeFastResend(BoardLinkCanId id)
+uint32_t SampleControlMode(void)
 {
-    if (id == BoardLinkCanId::ShootTriggerMode && g_scheduler.trigger_mode_fast_resend > 0)
-    {
-        g_scheduler.trigger_mode_fast_resend--;
-    }
+    return ((uint32_t)Global.Control.mode << 16) | (uint32_t)Global.Chassis.mode;
+}
 
-    if (id == BoardLinkCanId::ChassisMode && g_scheduler.mode_fast_resend > 0)
+// 边沿监视表: 需要自动快发的变量在此注册
+EdgeWatch g_edges[] = {
+    {BL_ID_TRIGGER_MODE, SampleTriggerMode, 0},
+    {BL_ID_CONTROL_MODE, SampleControlMode, 0},
+};
+
+constexpr uint8_t kEdgeCount = sizeof(g_edges) / sizeof(g_edges[0]);
+
+/**
+ * @brief 扫描所有边沿监视, 检测到变化则触发快发
+ */
+void DetectEdges(void)
+{
+    for (uint8_t i = 0; i < kEdgeCount; i++)
     {
-        g_scheduler.mode_fast_resend--;
+        uint32_t val = g_edges[i].sample();
+        if (val != g_edges[i].last_value)
+        {
+            g_edges[i].last_value = val;
+            int8_t idx = FindTxIndex(g_edges[i].can_id);
+            if (idx >= 0)
+                g_fast_resend[idx] = kFastResendTicks;
+        }
     }
 }
-}
+
+} // namespace
+
+/* ============== 公共接口 ============== */
 
 void BoardLink_Init(void)
 {
-    g_scheduler = SchedulerState{};
+    g_tick = 0;
+    for (uint8_t i = 0; i < kTxFrameCount; i++)
+        g_fast_resend[i] = 0;
+    // 初始化边沿监视的 last_value
+    for (uint8_t i = 0; i < kEdgeCount; i++)
+        g_edges[i].last_value = g_edges[i].sample();
+}
+
+void BoardLink_RequestFastResend(uint16_t can_id)
+{
+    int8_t idx = FindTxIndex(can_id);
+    if (idx >= 0)
+        g_fast_resend[idx] = kFastResendTicks;
 }
 
 void BoardLink_TxStep(void)
 {
-    UpdateFastResendState();
+    // 内置边沿检测
+    DetectEdges();
 
     uint8_t data[kCanFrameLength];
-    for (uint8_t i = 0; i < sizeof(kTxFrames) / sizeof(kTxFrames[0]); i++)
+    for (uint8_t i = 0; i < kTxFrameCount; i++)
     {
         const TxFrame &frame = kTxFrames[i];
-        uint8_t should_send = (g_scheduler.tick % frame.divider == frame.phase);
+        bool should_send = (g_tick % frame.divider == frame.phase);
 
-        if (ShouldForceTriggerResend(frame.id) || ShouldForceModeResend(frame.id))
-        {
-            should_send = 1;
-        }
+        // 快发覆盖: 有剩余拍数则强制发送
+        if (g_fast_resend[i] > 0)
+            should_send = true;
 
-        if (should_send == 0)
-        {
+        if (!should_send)
             continue;
-        }
 
         memset(data, 0, sizeof(data));
         frame.pack(data);
         if (Fdcanx_SendData(Get_CanHandle(1), ToRawId(frame.id), data, kCanFrameLength) == 0)
         {
-            ConsumeFastResend(frame.id);
+            // 发送成功才消耗快发计数
+            if (g_fast_resend[i] > 0)
+                g_fast_resend[i]--;
         }
     }
 
-    g_scheduler.tick++;
-    if (g_scheduler.tick >= kSchedulePeriodTick)
-    {
-        g_scheduler.tick = 0;
-    }
+    g_tick++;
+    if (g_tick >= kSchedulePeriodTick)
+        g_tick = 0;
 }
 
 uint8_t BoardLink_RxDispatch(FDCAN_HandleTypeDef *hfdcan, uint16_t id, uint8_t data[8])
