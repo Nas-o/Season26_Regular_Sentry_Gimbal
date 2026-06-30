@@ -2,8 +2,8 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-21 05:56:37
- * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.c
+ * @LastEditTime: 2026-06-20 04:49:11
+ * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.cpp
  */
 
 #include "Auto_control.hpp"
@@ -32,17 +32,15 @@ Sentry_cmd_t Sentry_cmd_1;
 Referee_data_t Referee;
 
 /* ========== 唯一自瞄全局状态 ========== */
-AutoAim_t AA;
+AutoAim_t AutoAim;
 
-uint32_t aa_rx_timeout_ms    = 100;   // 链路新鲜度: 超时则不信任任何帧 
-float aa_yaw_reject_deg      = 60.0f; // 执行安全: 目标yaw与IMU差值超过此阈值 → 拒绝该帧
-float aa_yaw_ff_max_deg_s    = 100.0f; // 执行安全: yaw前馈速度限幅 (deg/s)
+uint32_t rx_timeout_ms    = 100;   // 链路新鲜度: 超时则不信任任何帧 
+float yaw_reject_deg      = 60.0f; // 执行安全: 目标yaw与IMU差值超过此阈值 → 拒绝该帧
+float yaw_ff_max_deg_s    = 100.0f; // 执行安全: yaw前馈速度限幅 (deg/s)
 volatile uint32_t relative_timeout_ms = 8;
 volatile uint32_t relative_tick = 0;
-volatile uint32_t relative_lost = 0;
-volatile uint8_t  relative_seq = 0;
-float aa_big_yaw_ff_gain = 0.0f;
-float aa_big_yaw_ff_max_deg_s = 120.0f;
+float big_yaw_ff_gain = 0.0f;
+float big_yaw_ff_max_deg_s = 120.0f;
 
 uint8_t RelativeAngle_IsFresh(void)
 {
@@ -116,7 +114,7 @@ uint8_t decodeNAVdata(Navigation_data_t *target, unsigned char buff[], unsigned 
  *
  */
 void Navigation_Send_Message()
-    {
+{
     stm32send_1.remain_hp = Referee.current_HP;                                // 机器人实时血量
     stm32send_1.max_hp = Referee.maximum_HP;                                   // 最大血量
     stm32send_1.game_type = Referee.game_type;                                                      // 比赛类型
@@ -130,13 +128,13 @@ void Navigation_Send_Message()
     stm32send_1.is_fire = Global.Shoot.trigger_mode;
     //stm32send_1.distance = fromMINIPC.distance;
 
-     static uint8_t buff[sizeof(STM32ROS_data_t) + 3];
-    buff[0] = 0xA5;
-    memcpy(&buff[1], &stm32send_1, sizeof(STM32ROS_data_t));
-    append_CRC16_check_sum(buff, sizeof(buff));
+     static uint8_t s_buff[sizeof(STM32ROS_data_t) + 3];
+    s_buff[0] = 0xA5;
+    memcpy(&s_buff[1], &stm32send_1, sizeof(STM32ROS_data_t));
+    append_CRC16_check_sum(s_buff, sizeof(s_buff));
 
-    /* Vircom_Send(buff, sizeof(buff)); */
-    HAL_UART_Transmit_DMA(UART7_data.huart, buff, sizeof(buff));
+    /* Vircom_Send(s_buff, sizeof(s_buff)); */
+    HAL_UART_Transmit_DMA(UART7_data.huart, s_buff, sizeof(s_buff));
     
 }
 
@@ -229,7 +227,8 @@ void STM32_to_MINIPC()
     toMINIPC.q[1] = imu_gimbal.q[1];//IMU_data.AHRS.q[1];
     toMINIPC.q[2] = imu_gimbal.q[2];//IMU_data.AHRS.q[2];
     toMINIPC.q[3] = imu_gimbal.q[3];//IMU_data.AHRS.q[3];
-    toMINIPC.bullet_speed = Referee.initial_speed;
+    toMINIPC.bullet_speed = 24;//Referee.initial_speed;
+    toMINIPC.enemy_color = 1;
     toMINIPC.bullet_count = Referee.launching_frequency;
     int len = (uint8_t *)&toMINIPC.crc16 - (uint8_t *)&toMINIPC;
     // 此时调用 CRC，无论结构体怎么变都永远正确
@@ -244,30 +243,32 @@ void STM32_to_MINIPC()
  * @param x 
  * @return float 
  */
-static float WrapDeltaDeg(float x)
+namespace {
+float WrapDeltaDeg(float x)
 {
     while (x >  180.0f) x -= 360.0f;
     while (x < -180.0f) x += 360.0f;
     return x;
 }
+} // namespace
 
 void MINIPC_to_STM32(void)
 {
     /* ---- 链路新鲜度 ---- */
     uint32_t age = HAL_GetTick() - minipc_last_rx_tick;
-    AA.rx_fresh = (minipc_last_rx_tick != 0 && age <= aa_rx_timeout_ms) ? 1 : 0;
+    AutoAim.rx_fresh = (minipc_last_rx_tick != 0 && age <= rx_timeout_ms) ? 1 : 0;
 
     /* ---- 检测新包 ---- */
-    static uint32_t last_rx_seq = 0;
-    uint8_t is_new_pkt = (minipc_rx_seq != last_rx_seq);
-    last_rx_seq = minipc_rx_seq;
+    static uint32_t s_last_rx_seq = 0;
+    uint8_t is_new_pkt = (minipc_rx_seq != s_last_rx_seq);
+    s_last_rx_seq = minipc_rx_seq;
 
     /* ---- 语义决策直接取 mode ---- */
-    AA.mode_raw = fromMINIPC.mode;
-    AA.control_req = AA.rx_fresh && (AA.mode_raw != CTRL_NO_CONTROL);
+    AutoAim.mode_raw = fromMINIPC.mode;
+    AutoAim.control_req = AutoAim.rx_fresh && (AutoAim.mode_raw != CTRL_NO_CONTROL);
 
     /* ---- 只在 fresh && control && 新包时更新目标数据 ---- */
-    if (is_new_pkt && AA.control_req)
+    if (is_new_pkt && AutoAim.control_req)
     {
         Global.Auto.input.shoot_yaw    = fromMINIPC.yaw;
         Global.Auto.input.shoot_pitch  = fromMINIPC.pitch;
@@ -289,11 +290,12 @@ void MINIPC_to_STM32(void)
 }
 #endif
 
+namespace {
 /**
  * @brief 跟踪
  * 
  */
-static void Auto_Control(void)
+void Auto_Control(void)
 {
     float target_yaw_deg = rad2degree(Global.Auto.input.shoot_yaw);
     float current_yaw_deg = imu_gimbal.yaw;
@@ -307,8 +309,8 @@ static void Auto_Control(void)
     Gimbal_SetYawAngle(target_yaw_cnt);
     Gimbal_SetPitchAngle(-target_pitch_deg);
 
-    AA.target_yaw = target_yaw_cnt;
-    AA.target_pitch = -target_pitch_deg;
+    AutoAim.target_yaw = target_yaw_cnt;
+    AutoAim.target_pitch = -target_pitch_deg;
 }
 
 
@@ -316,76 +318,76 @@ static void Auto_Control(void)
  * @brief 扫描---入口切换
  *
  */
-static void Scan_Internal(void)
+void Scan_Internal(void)
 {
     const float PITCH_MAX = 20.0f;
     const float PITCH_MIN = PITCHI_MIN_ANGLE;
     float small_yaw_relative_now = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     /* 初始同步 */
-    if (!AA.scan_init_done) {
-        AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
-        AA.scan_offset = 0.0f;
-        AA.scan_yaw_dir = -1;
-        AA.scan_init_done = 1;
+    if (!AutoAim.scan_init_done) {
+        AutoAim.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
+        AutoAim.scan_offset = 0.0f;
+        AutoAim.scan_yaw_dir = -1;
+        AutoAim.scan_init_done = 1;
     }
 
     float phys_now = rad2degree(Gimbal.pitch.pos_now);
 
     /* Pitch 上下扫描 */
     if (Gimbal.pitch.turnover == 1) {
-        AA.scan_pitch_deg += aa_scan_pitch_step_deg;
-        if (phys_now >= (PITCH_MAX - 1.0f) || AA.scan_pitch_deg > (PITCH_MAX + 3.0f))
+        AutoAim.scan_pitch_deg += aa_scan_pitch_step_deg;
+        if (phys_now >= (PITCH_MAX - 1.0f) || AutoAim.scan_pitch_deg > (PITCH_MAX + 3.0f))
             Gimbal.pitch.turnover = 0;
     } else {
-        AA.scan_pitch_deg -= aa_scan_pitch_step_deg;
-        if (phys_now <= (PITCH_MIN + 1.0f) || AA.scan_pitch_deg < (PITCH_MIN - 3.0f))
+        AutoAim.scan_pitch_deg -= aa_scan_pitch_step_deg;
+        if (phys_now <= (PITCH_MIN + 1.0f) || AutoAim.scan_pitch_deg < (PITCH_MIN - 3.0f))
             Gimbal.pitch.turnover = 1;
     }
-    if (AA.scan_pitch_deg > PITCH_MAX + 3.0f) AA.scan_pitch_deg = PITCH_MAX + 3.0f;
-    if (AA.scan_pitch_deg < PITCH_MIN - 3.0f) AA.scan_pitch_deg = PITCH_MIN - 3.0f;
+    if (AutoAim.scan_pitch_deg > PITCH_MAX + 3.0f) AutoAim.scan_pitch_deg = PITCH_MAX + 3.0f;
+    if (AutoAim.scan_pitch_deg < PITCH_MIN - 3.0f) AutoAim.scan_pitch_deg = PITCH_MIN - 3.0f;
 
-    Global.Gimbal.input.pitch = AA.scan_pitch_deg;
-    Gimbal.pitch.pos_set = degree2rad(AA.scan_pitch_deg);
+    Global.Gimbal.input.pitch = AutoAim.scan_pitch_deg;
+    Gimbal.pitch.pos_set = degree2rad(AutoAim.scan_pitch_deg);
 
     /* 小Yaw扫描：直接速度控制 */
-    AA.scan_offset = small_yaw_relative_now;
+    AutoAim.scan_offset = small_yaw_relative_now;
     float scan_yaw_speed_deg_s = 0.0f;
 /*     if (toMINIPC.mode == MODE_AUTO_AIM)
     { */
         if (small_yaw_relative_now >= aa_scan_yaw_limit_deg)
-            AA.scan_yaw_dir = -1;
+            AutoAim.scan_yaw_dir = -1;
         else if (small_yaw_relative_now <= -aa_scan_yaw_limit_deg)
-            AA.scan_yaw_dir = 1;
+            AutoAim.scan_yaw_dir = 1;
         scan_yaw_speed_deg_s = aa_scan_yaw_speed_deg_s;
 /*     }
     else
     {
-        AA.scan_yaw_dir = 0;
+        AutoAim.scan_yaw_dir = 0;
     } */
     
 
-    Gimbal.yaw.spd_set = AA.scan_yaw_dir * scan_yaw_speed_deg_s;
+    Gimbal.yaw.spd_set = AutoAim.scan_yaw_dir * scan_yaw_speed_deg_s;
 
 }
 
-static void Scan_Reset_Internal(void)
+void Scan_Reset_Internal(void)
 {
-    AA.scan_init_done = 0;
-    AA.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
-    AA.scan_offset    = 0.0f;
-    AA.scan_yaw_dir   = 0;
+    AutoAim.scan_init_done = 0;
+    AutoAim.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
+    AutoAim.scan_offset    = 0.0f;
+    AutoAim.scan_yaw_dir   = 0;
 }
 
 /**
  * @brief 上下沿边沿应用
  * 
  */
-static void EdgeAction_Update(void)
+void EdgeAction_Update(void)
 {
     /* 上升沿 (0→1/2, 进入 track): 同步 setpoint */
-    if (AA.control_req && !AA.control_req_last) 
+    if (AutoAim.control_req && !AutoAim.control_req_last) 
     {
-        AA.reacquire_freeze = 1;
+        AutoAim.reacquire_freeze = 1;
         Gimbal.yaw.pos_set = Gimbal.yaw.pos_now;
         Global.Gimbal.input.yaw = Gimbal.yaw.pos_now;
         Global.Auto.input.yaw_ff = 0;
@@ -393,57 +395,57 @@ static void EdgeAction_Update(void)
     }
 
     /* 下降沿 (1/2→0, 离开 track):准备进入扫描 */
-    if (!AA.control_req && AA.control_req_last) 
+    if (!AutoAim.control_req && AutoAim.control_req_last) 
     {
         Global.Auto.input.yaw_ff = 0;
         Global.Auto.input.pitch_ff = 0;
     }
 }
 
-static void Planner_Update(void)
+void Planner_Update(void)
 {
     uint8_t auto_enabled = (Global.Auto.mode != NONE);
 
     if (!auto_enabled) 
     {
-        AA.state = AIM_OFF;
-        AA.is_scanning = 0;
+        AutoAim.state = AIM_OFF;
+        AutoAim.is_scanning = 0;
     } 
-    else if (AA.reacquire_freeze) 
+    else if (AutoAim.reacquire_freeze) 
     {
-        AA.state = AIM_REACQUIRE;
-            AA.is_scanning = 0;
+        AutoAim.state = AIM_REACQUIRE;
+            AutoAim.is_scanning = 0;
         /* reacquire 拍: 不调 Auto_Control(), setpoint 保持当前位置 */
     } 
-    else if (AA.control_req) 
+    else if (AutoAim.control_req) 
     {
-        AA.state = AIM_TRACK;
-        AA.is_scanning = 0;
+        AutoAim.state = AIM_TRACK;
+        AutoAim.is_scanning = 0;
         Auto_Control();
     } 
     else 
     {
-        AA.state = AIM_SCAN;
-        if (!AA.is_scanning)
+        AutoAim.state = AIM_SCAN;
+        if (!AutoAim.is_scanning)
         Scan_Reset_Internal();
         Scan_Internal();
-        AA.is_scanning = 1;
+        AutoAim.is_scanning = 1;
     }
 
     /* 清除冻结标志 */
-    AA.reacquire_freeze = 0;
+    AutoAim.reacquire_freeze = 0;
 }
 
 /**
  * @brief 自瞄路径
  * 
  */
-static void FireGate_Update(void)
+void FireGate_Update(void)
 {
     Global.Shoot.mcu_fire_permit =
         (Global.Auto.mode != NONE)
-        && AA.rx_fresh
-        && (AA.mode_raw == CTRL_AIM_AND_FIRE)
+        && AutoAim.rx_fresh
+        && (AutoAim.mode_raw == CTRL_AIM_AND_FIRE)
         && (Global.Shoot.shoot_status == OK);
 }
 
@@ -451,24 +453,25 @@ static void FireGate_Update(void)
  * @brief 填充 AA 内部调试量
  * 
  */
-static void DebugFill_Update(void)
+void DebugFill_Update(void)
 {
-    AA.dbg_yaw_target_raw_deg = rad2degree(Global.Auto.input.shoot_yaw);
+    AutoAim.dbg_yaw_target_raw_deg = rad2degree(Global.Auto.input.shoot_yaw);
     if (AutoAim_IsScanning())
     {
-        AA.dbg_yaw_cmd_deg = AA.scan_offset;
-        AA.dbg_yaw_now_deg = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+        AutoAim.dbg_yaw_cmd_deg = AutoAim.scan_offset;
+        AutoAim.dbg_yaw_now_deg = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
     }
     else
     {
-        AA.dbg_yaw_cmd_deg = Global.Gimbal.input.yaw;
-        AA.dbg_yaw_now_deg = imu_gimbal.yaw_cnt;
+        AutoAim.dbg_yaw_cmd_deg = Global.Gimbal.input.yaw;
+        AutoAim.dbg_yaw_now_deg = imu_gimbal.yaw_cnt;
     }
 
-    AA.dbg_yaw_ff_deg_s       = rad2degree(Global.Auto.input.yaw_ff);
-    AA.dbg_encoder_relative   = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
-    AA.dbg_mcu_fire_permit    = (float)Global.Shoot.mcu_fire_permit;
+    AutoAim.dbg_yaw_ff_deg_s       = rad2degree(Global.Auto.input.yaw_ff);
+    AutoAim.dbg_encoder_relative   = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+    AutoAim.dbg_mcu_fire_permit    = (float)Global.Shoot.mcu_fire_permit;
 }
+} // namespace
 
 /* =====================================================================
  *  公共接口 — 自瞄总入口 (freertos.c 每 1ms 调一次)
@@ -496,7 +499,7 @@ void AutoAim_Update(void)
     DebugFill_Update();
 
     /* 7. 保存本拍 control_req 用于下一拍边沿检测 */
-    AA.control_req_last = AA.control_req;
+    AutoAim.control_req_last = AutoAim.control_req;
 
     /* 8.丢包检测 */
     float chk[4] = {imu_gimbal.gyro[0],imu_gimbal.gyro[2],fromMINIPC.yaw_vel, fromMINIPC.pitch_vel};
@@ -508,22 +511,22 @@ void AutoAim_Update(void)
  * ===================================================================== */
 uint8_t AutoAim_IsControllingGimbal(void)
 {
-    return (AA.state != AIM_OFF) ? 1 : 0;
+    return (AutoAim.state != AIM_OFF) ? 1 : 0;
 }
 
 uint8_t AutoAim_IsTracking(void)
 {
-    return (AA.state == AIM_TRACK) ? 1 : 0;
+    return (AutoAim.state == AIM_TRACK) ? 1 : 0;
 }
 
 uint8_t AutoAim_IsScanning(void)
 {
-    return AA.is_scanning;
+    return AutoAim.is_scanning;
 }
 
 uint8_t AutoAim_ShouldBigYawFollow(void)
 {
-    return (AA.state != AIM_OFF) ? 1 : 0;
+    return (AutoAim.state != AIM_OFF) ? 1 : 0;
 }
 
 /* =====================================================================
@@ -533,8 +536,11 @@ uint8_t AutoAim_ShouldBigYawFollow(void)
  *        最多同时监测 4 个变量 (通道 0~3).
  * ===================================================================== */
 uint32_t lost_pkg_cnt[4] = {0};          // 4个通道的丢包计数
-static float lost_pkg_last_val[4] = {0}; // 上一次各通道的值
-static uint8_t lost_pkg_init[4] = {0};   // 初始化标志
+
+namespace {
+float lost_pkg_last_val[4] = {0};        // 上一次各通道的值
+uint8_t lost_pkg_init[4] = {0};          // 初始化标志
+} // namespace
 
 /**
  * @brief 通信丢包检测 — 传入最多4个变量的当前值
@@ -578,6 +584,7 @@ void LostPkg_Reset(uint8_t ch)
     }
     else if (ch < 4)
     {
+        
         lost_pkg_cnt[ch] = 0;
         lost_pkg_init[ch] = 0;
     }

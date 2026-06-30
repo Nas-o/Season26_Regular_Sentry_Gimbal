@@ -2,407 +2,494 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-27
+ * @LastEditTime: 2026-06-05 19:55:59
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.cpp
- * @brief  云台控制器 —— 初始化、数据更新、控制解算、电机输出
- * @note   包括初始化，数据更新、控制量计算与直接控制量设置
- * @history
- *  Version    Date            Author          Modification
- *  V1.0.0   2025.10.31       Wang Zihao       1.重新构建云台代码结构
- *  V2.0.0   2026.05.27       Refactor         2.C++重构: 匿名命名空间, constexpr, 命名简化
- */
-#include "Gimbal.hpp"
-#include "Global_status.hpp"
+ * @brief  云台控制器 —— C++类实现: 初始化、数据更新、控制解算、电机输出
+*/
 
-#include "User_math.hpp"
+#include "Gimbal.hpp"          
+#include "Global_status.hpp"  
+
+#include "User_math.hpp"     
 #include "remote_control.hpp"
-#include "IMU_updata.hpp"
-#include "dm_imu.hpp"
-#include "hipnuc_dec.hpp"
-#include "motor.hpp"
-#include "vofa+.hpp"
-#include "Auto_control.hpp"
-#include "lqr_controller.hpp"
+#include "IMU_updata.hpp"     
+#include "dm_imu.hpp"       
+#include "motor.hpp"        
+#include "vofa+.hpp"           
+#include "Auto_control.hpp"    
+#include "lqr_controller.hpp" 
 
-Gimbal_t Gimbal;
-volatile float relative_angle;
+using namespace robot::gimbal;
 
-/* ============== 公共接口 ============== */
-
-void Gimbal_Limit(float pitch_up, float pitch_down, float yaw_l, float yaw_r)
-{
-    if (Gimbal.pitch.pos_set <= pitch_up && Gimbal.pitch.pos_set < Gimbal.pitch.pos_now)
-        Gimbal.pitch.pos_set = pitch_up;
-    else if (Gimbal.pitch.pos_set >= pitch_down && Gimbal.pitch.pos_set > Gimbal.pitch.pos_now)
-        Gimbal.pitch.pos_set = pitch_down;
-}
-
-/* ============== 内部实现 (匿名命名空间, 仅本文件可见) ============== */
-namespace {
-
-constexpr float kCtrlDt = 0.001f;  // 控制周期 (s), 1kHz
-
-template<typename T>
-constexpr T Clamp(T val, T lo, T hi) {
-    return (val < lo) ? lo : (val > hi) ? hi : val;
-}
+GimbalController Gimbal;          
+volatile float relative_angle;     
 
 /**
- * @brief 大yaw底盘前馈 → 小yaw速度参考 (deg/s)
- * @note  对板数据不新鲜时返回0, 执行安全限幅
+ * @brief  云台角度限位
+ * @param  pitch_up    Pitch轴向上机械极限角度 (rad)
+ * @param  pitch_down  Pitch轴向下机械极限角度 (rad)
+ * @param  yaw_l      Yaw轴左极限
+ * @param  yaw_r      Yaw轴右极限 
+ * @note   仅在目标角超出限位且运动方向朝向极限时才钳位,
+ *         避免从极限位置回中时被错误限制
  */
-float GetBigYawFF_DegS()
+void GimbalController::limit(float pitch_up, float pitch_down, float yaw_l, float yaw_r)
 {
+    // 目标超过上限 且 当前位置大于目标 → 防止继续向上
+    if (pitch.pos_set <= pitch_up && pitch.pos_set < pitch.pos_now)
+        pitch.pos_set = pitch_up;
+    // 目标超过下限 且 当前位置小于目标 → 防止继续向下
+    else if (pitch.pos_set >= pitch_down && pitch.pos_set > pitch.pos_now)
+        pitch.pos_set = pitch_down;
+}
+
+/*-------------------- Private: getBigYawFF_DegS --------------------*/
+
+/**
+ * @brief  获取大Yaw轴角速度前馈 (单位: deg/s)
+ * @return 大Yaw前馈值, 用于补偿底盘旋转对小Yaw的扰动
+ * @note   - 当编码器数据不新鲜(通信丢失)时返回0, 避免使用过期数据
+ *         - 前馈值 = -(大yaw角速度 × 前馈增益)
+ *         - 若前馈绝对值超过阈值 aa_big_yaw_ff_max_deg_s, 则视为异常返回0
+ *         - 负号表示方向补偿: 底盘顺时针转 → 小yaw需逆时针补偿
+ */
+float GimbalController::getBigYawFF_DegS()
+{
+    // 编码器数据超时 → 不做前馈补偿
     if (!RelativeAngle_IsFresh())
         return 0.0f;
 
-    // 下板发来的是 deg/s，这里不要再做 rad2degree
-    float ff = -Gimbal.yaw.big_ff * aa_big_yaw_ff_gain;
-    if (fabsf(ff) > aa_big_yaw_ff_max_deg_s)
+    // 计算前馈: 大yaw实际角速度 × 增益, 取反方向
+    float ff = -yaw.big_ff * big_yaw_ff_gain;
+    // 超限保护: 防止通信抖动产生过大前馈
+    if (fabsf(ff) > big_yaw_ff_max_deg_s)
         return 0.0f;
 
     return ff;
 }
 
-} // namespace (utilities)
-
-/*-------------------- Init --------------------*/
+/*-------------------- Public: init --------------------*/
 
 /**
- * @brief  云台初始化
- * @note   电机初始化 → PID/LQR参数 → 零点设定 → 校准变量
+ * @brief  云台控制器初始化
+ * @note   在RTOS启动前由 Gimbal_Init() C包装调用一次
+ *         完成以下工作:
+ *         1. Pitch轴 DM4310 电机初始化 (MIT模式)
+ *         2. 小Yaw轴 GM6020 电机初始化
+ *         3. Pitch MIT模式 Kp/Kd/重力补偿系数
+ *         4. Pitch LQR 外环控制器 (可选路径)
+ *         5. 小Yaw PID 串级参数 (位置环+速度环)
+ *         6. 小Yaw LQR/LQI 控制器 (可选路径)
+ *         7. 小Yaw 编码器零点标定
+ *         8. Pitch 校准标志位及重力积分补偿器归零
  */
-void Gimbal_Init()
+void GimbalController::init()
 {
-    // 云台电机初始化
-    DMMotor_Init(DM_4310, PITCHMotor);
+    /* ---- 1. 电机驱动初始化 ---- */
+    DMMotor_Init(DM_4310, PITCHMotor);      
     DJIMotor_Init(DJI_GM6020, SMALLYAWMotor);
     
-    /*------MIT模式参数初始化------*/
-    Gimbal.pitch.kp = 18.0f;              // 位置比例增益
-    Gimbal.pitch.kd = 1.2f;               // 速度阻尼增益
-    Gimbal.pitch.k_gravity = 0.891800784f; // 重力前馈系数
+    /* ---- 2. Pitch MIT模式参数 ---- */
+    pitch.kp = 18.0f;
+    pitch.kd = 1.2f;
+    // k_gravity: 静态重力力矩系数, 用于 τ = k*cos(θ) 前馈补偿
+    pitch.k_gravity = 0.891800784f;
 
-    /*------Pitch LQR 外环 (PITCH_USE_LQR=1 时生效)------*/
-    // 暂用 2 态 LQR (不含积分, 因为已有 gravity_integral 做稳态修正)
-    // 状态 = [pitch_angle_rad, pitch_rate_rad_s], 输出 = 力矩(N·m)
+    /* ---- 3. Pitch LQR 外环 (PITCH_USE_LQR=1时生效) ---- */
     {
+        // K_pitch = [Kp, Kd], 2维状态: [位置误差, 速度误差]
         float K_pitch[2] = { 18.0f, 1.2f };
-        LQR_Init(&Gimbal.pitch.lqr, K_pitch, 2, kCtrlDt, 0.0f, 3.0f);
+        // 积分限幅0 (无积分), 输出限幅3.0 Nm
+        LQR_Init(&pitch.lqr, K_pitch, 2, kCtrlDt, 0.0f, 3.0f);
     }
     
-    /*------小Yaw PID 串级初始化------*/
-    PID_Set(&Gimbal.yaw.spd_pid,      65.0f, 0.01f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
-    PID_Set(&Gimbal.yaw.auto_spd_pid, 85.0f, 0.01f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
-    PID_Set(&Gimbal.yaw.pos_pid,      18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, 1000);
-    PID_Set(&Gimbal.yaw.auto_pos_pid, 18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, 1000);
+    /* ---- 4. 小Yaw PID 串级初始化 ---- */
 
-    // 小yaw速度一阶低通滤波系数 (0~1, 越小滤波越强)
-    Gimbal.yaw.lpf_alpha = 1.0f;
-    Gimbal.yaw.spd_now = 0.0f;
-    Gimbal.yaw.spd_raw = 0.0f;
+    PID_Set(&yaw.spd_pid,      65.0f, 0.01f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
+    PID_Set(&yaw.auto_spd_pid, 85.0f, 0.01f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
+    PID_Set(&yaw.pos_pid,      18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, 1000);
+    PID_Set(&yaw.auto_pos_pid, 18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, 1000);
 
-    /*------小Yaw LQR/LQI 初始化------*/
-    // K 增益由 MATLAB dlqr/lqr 离线求得, 状态 = [angle_deg, rate_deg_s, integral]
+    // 小yaw速度一阶低通滤波: alpha=1.0 表示不滤波(直通)
+    yaw.lpf_alpha = 1.0f;
+    yaw.spd_now = 0.0f;
+    yaw.spd_raw = 0.0f;
+
+    /* ---- 5. 小Yaw LQR/LQI 初始化 (SMALL_YAW_USE_LQR=1时生效) ---- */
     {
         float K_manual[3] = { 120.0f, 8.0f, 60.0f };
-        LQR_Init(&Gimbal.yaw.lqr, K_manual, 3, kCtrlDt, 50.0f, GIMBAL_MAX_CURRENT);
+        LQR_Init(&yaw.lqr, K_manual, 3, kCtrlDt, 50.0f, GIMBAL_MAX_CURRENT);
 
-        // 自瞄模式 (可独立调参, 通常更激进)
         float K_auto[3] = { 150.0f, 10.0f, 80.0f };
-        LQR_Init(&Gimbal.yaw.lqr_auto, K_auto, 3, kCtrlDt, 50.0f, GIMBAL_MAX_CURRENT);
+        LQR_Init(&yaw.lqr_auto, K_auto, 3, kCtrlDt, 50.0f, GIMBAL_MAX_CURRENT);
     }
 
-    // 云台零点
+    /* ---- 6. 小Yaw 编码器零点 ---- */
+    // 设置GM6020编码器零偏, 使相对角度=0对应云台正前方
     DJIMotor_SetZero(SMALL_YAW_ZERO, SMALLYAWMotor);
     
-    // 初始化校准变量
-    Gimbal.pitch.inited = 0;
-    Gimbal.pitch.offset = 0.0f;
+    /* ---- 7. Pitch 校准变量 ---- */
+    // inited=0: 等待DM4310首包反馈后完成零位标定
+    pitch.inited = 0;
+    pitch.offset = 0.0f;
 
-    // 重力积分补偿器初始化
-    Gimbal.pitch.grav_integral = 0.0f;
-    Gimbal.pitch.ki_grav = 0.1f;          // 起步值，可在线调整
-    Gimbal.pitch.grav_int_limit = 0.8f;   // N·m 限幅
+    /* ---- 8. 重力积分补偿器 ---- */
+    // 用积分消除静态重力补偿的残差 (k_gravity标定不精确时)
+    pitch.grav_integral = 0.0f;   // 积分累计值
+    pitch.ki_grav = 0.1f;         // 积分增益
+    pitch.grav_int_limit = 0.8f;  // 积分限幅 (Nm)
 
-    // 大yaw前馈
-    Gimbal.yaw.big_ff = 0;
+    /* ---- 9. 大Yaw前馈 ---- */
+    // 由CAN接收大yaw电机角速度, 用于小yaw前馈补偿
+    yaw.big_ff = 0;
 }
 
-
-/* ============== 内部控制流程 ============== */
-namespace {
+/*-------------------- Private: update --------------------*/
 
 /**
- * @brief  控制量更新（包括状态量和目标量）
- * @note   速度使用IMU解耦投影，位置使用连续累积角度避免±180°跳变
+ * @brief  更新云台状态量和目标量
+ * @note   每个控制周期(1kHz)调用一次, 完成:
+ *         1. 从IMU读取当前角度/角速度
+ *         2. Pitch首次上电零位标定
+ *         3. 根据模式计算Yaw/Pitch目标值
  */
-void Update()
+void GimbalController::update()
 {
-    /*------状态量更新------*/
-    // 速度: 将IMU三轴角速度投影到yaw轴 (消除pitch姿态耦合)
-    Gimbal.yaw.spd_raw = cos(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[2])
-                        - sin(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[0]);
-    // 一阶低通滤波: y = alpha * x + (1 - alpha) * y_last
-    Gimbal.yaw.spd_now = Gimbal.yaw.lpf_alpha * Gimbal.yaw.spd_raw
-                        + (1.0f - Gimbal.yaw.lpf_alpha) * Gimbal.yaw.spd_now;
-    Gimbal.pitch.spd_now = -imu_gimbal.gyro[1];
+    /*=== 1. 状态量更新: 从IMU获取当前角度和角速度 ===*/
+    
+    // Yaw角速度: 将IMU body系角速度投影到水平面
+    // 公式: ωyaw = cos(pitch)*ωz - sin(pitch)*ωx
+    // 原因: IMU固连在Pitch轴上, 当Pitch倾斜时z轴不再垂直
+    yaw.spd_raw = cos(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[2])
+                - sin(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[0]);
+    // 一阶低通滤波: y[n] = α*x[n] + (1-α)*y[n-1]
+    yaw.spd_now = yaw.lpf_alpha * yaw.spd_raw
+                + (1.0f - yaw.lpf_alpha) * yaw.spd_now;
+    // Pitch角速度: 直接取IMU Y轴陀螺仪 (取反匹配坐标系)
+    pitch.spd_now = -imu_gimbal.gyro[1];
 
-    // 位置
-    Gimbal.yaw.pos_now   = imu_gimbal.yaw_cnt;  // 使用连续累积角度
-    Gimbal.pitch.pos_now  = degree2rad(-imu_gimbal.pitch);
+    // Yaw位置: 使用IMU连续计数值(不归零, 避免±180°跳变)
+    yaw.pos_now   = imu_gimbal.yaw_cnt;
+    // Pitch位置: 从度转弧度, 取反匹配电机正方向
+    pitch.pos_now = degree2rad(-imu_gimbal.pitch);
 
-    /*------上电初始化校准 (计算IMU和电机坐标系的差值)------*/
-    if (Gimbal.pitch.inited == 0)
+    /*=== 2. 上电初始化校准 (仅执行一次) ===*/
+    if (pitch.inited == 0)
     {
+        // 等待DM4310电机返回第一帧有效数据 (id≠0)
         DM_motor_data_s dm = DMMotor_GetData(PITCHMotor);
-        if (dm.motor_data.para.id != 0)  // 检查电机是否在线
+        if (dm.motor_data.para.id != 0)
         {
-            Gimbal.pitch.offset = dm.motor_data.para.pos - Gimbal.pitch.pos_now;
+            // offset = 电机绝对位置 - IMU当前角度
+            // 之后控制时: 电机目标 = IMU目标 + offset
+            pitch.offset = dm.motor_data.para.pos - pitch.pos_now;
+            // 将当前Pitch角度设为初始目标(防止上电突跳)
             Global.Gimbal.input.pitch = -imu_gimbal.pitch;
-            Gimbal.pitch.inited = 1;
+            pitch.inited = 1;
         }
     }
 
-    /*------目标量更新------*/
-    Gimbal.pitch.pos_set = degree2rad(Global.Gimbal.input.pitch);
+    /*=== 3. 目标量更新 ===*/
+    // Pitch目标: 从全局输入(度)转弧度
+    pitch.pos_set = degree2rad(Global.Gimbal.input.pitch);
 
+    // Yaw目标: 根据自瞄/底盘模式分支
     if (AutoAim_IsControllingGimbal())
     {
         if (AutoAim_IsScanning())
-            Gimbal.yaw.pos_set = Gimbal.yaw.pos_now;  // 扫描态: 位置跟随, 防退出时跳变
+            // 扫描模式: 保持当前朝向, 速度环接管
+            yaw.pos_set = yaw.pos_now;
         else
-            Gimbal.yaw.pos_set = Global.Gimbal.input.yaw;  // 跟踪态
+            // 自瞄跟踪: 目标由视觉计算写入 Global.Gimbal.input.yaw
+            yaw.pos_set = Global.Gimbal.input.yaw;
     }
     else
     {
-        // 手动: 遥控/导航
         if (Global.Chassis.mode == FLOW_Gimbal)
         {
+            // 底盘跟随云台模式: 小yaw需用编码器补偿底盘转动
+            // enc_rel: 小yaw相对底盘的偏移角
             float enc_rel = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
-            Gimbal.yaw.pos_set = Gimbal.yaw.pos_now - enc_rel;
+            // IMU目标 = 当前IMU角 - 编码器偏移 → 保持云台绝对朝向不变
+            yaw.pos_set = yaw.pos_now - enc_rel;
         }
         else
         {
-            Gimbal.yaw.pos_set = Global.Gimbal.input.yaw;
+            // 其他模式: 直接使用遥控器/键鼠设定的目标角
+            yaw.pos_set = Global.Gimbal.input.yaw;
         }
     }
 }
 
+/*-------------------- Private: calculate --------------------*/
 
 /**
- * @brief  控制量解算 (小Yaw)
- * @note   支持 LQR/LQI 和 PID串级 两条路径, 由 SMALL_YAW_USE_LQR 宏切换
+ * @brief  小Yaw轴控制量解算
+ * @note   根据宏 SMALL_YAW_USE_LQR 选择 LQR 或 PID 路径
+ *         控制分三种场景:
+ *         A) 自瞄扫描中 (无目标): 纯速度环跟踪扫描速度
+ *         B) 手动/非跟踪: 位置+速度串级 / LQI 全状态反馈
+ *         C) 自瞄跟踪中: 使用自瞄参数 + 视觉速度前馈
+ *
+ *         输出: yaw.current → GM6020电流指令 (±GIMBAL_MAX_CURRENT)
  */
-void Calculate()
+void GimbalController::calculate()
 {
 #if SMALL_YAW_USE_LQR
-    /* ===== LQR/LQI 路径 ===== */
+    /* ===== LQR/LQI 路径 (高性能, 需精确建模) ===== */
     if (!AutoAim_IsTracking())
     {
         if (AutoAim_IsScanning())
         {
-            // 扫描态: 用编码器速度做反馈, 避免IMU世界系耦合导致抖动
-            float ff = GetBigYawFF_DegS();
-            float cmd = Gimbal.yaw.spd_set + ff;
+            // 场景A: 扫描模式 → 纯速度环
+            // 目标速度 = 扫描速度指令 + 大Yaw前馈补偿
+            float ff = getBigYawFF_DegS();
+            float cmd = yaw.spd_set + ff;
+            // 使用编码器速度反馈 (rpm→deg/s: ×6)
             float enc_spd = (float)DJIMotor_GetData(SMALLYAWMotor).speed_rpm * 6.0f;
-            Gimbal.yaw.current = PID_Cal(&Gimbal.yaw.spd_pid, enc_spd, cmd);
+            yaw.current = PID_Cal(&yaw.spd_pid, enc_spd, cmd);
         }
         else
         {
-            // 手动/导航: LQR 状态反馈, 大yaw前馈作为速度参考
-            float ff = GetBigYawFF_DegS();
-            Gimbal.yaw.current = LQR_Calc(&Gimbal.yaw.lqr,
-                Gimbal.yaw.pos_now, Gimbal.yaw.spd_now,
-                Gimbal.yaw.pos_set, ff, 0.0f);
+            // 场景B: 手动模式 → LQI全状态反馈
+            // 输入: [位置误差, 速度误差, 积分误差]
+            // 速度参考 = 大Yaw前馈 (补偿底盘旋转)
+            float ff = getBigYawFF_DegS();
+            yaw.current = LQR_Calc(&yaw.lqr,
+                yaw.pos_now, yaw.spd_now,
+                yaw.pos_set, ff, 0.0f);
         }
     }
     else
     {
-        // 跟踪态: LQR + 视觉前馈
+        // 场景C: 自瞄跟踪 → 自瞄LQI + 视觉速度前馈
+        // yaw_ff: 视觉预测的目标角速度 (rad/s→deg/s)
         float yaw_ff = rad2degree(Global.Auto.input.yaw_ff);
+        // 超限保护: 防止视觉异常值导致云台甩头
         if (fabsf(yaw_ff) > aa_yaw_ff_max_deg_s) yaw_ff = 0.0f;
-        float rate_ref = yaw_ff + GetBigYawFF_DegS();
+        // 总速度参考 = 视觉前馈 + 大Yaw前馈
+        float rate_ref = yaw_ff + getBigYawFF_DegS();
 
-        Gimbal.yaw.current = LQR_Calc(&Gimbal.yaw.lqr_auto,
-            Gimbal.yaw.pos_now, Gimbal.yaw.spd_now,
-            Gimbal.yaw.pos_set, rate_ref, 0.0f);
+        yaw.current = LQR_Calc(&yaw.lqr_auto,
+            yaw.pos_now, yaw.spd_now,
+            yaw.pos_set, rate_ref, 0.0f);
     }
 
 #else
-    /* ===== PID 串级路径 (回退通道) ===== */
+    /* ===== PID 串级路径 (经典, 鲁棒性好) ===== */
     if (!AutoAim_IsTracking())
     {
         if (AutoAim_IsScanning())
         {
-            // 扫描态: 编码器速度反馈, 与大yaw解耦
-            float ff = GetBigYawFF_DegS();
-            float cmd = Gimbal.yaw.spd_set + ff;
+            // 场景A: 扫描模式 → 纯速度环 (同LQR路径)
+            float ff = getBigYawFF_DegS();
+            float cmd = yaw.spd_set + ff;
             float enc_spd = (float)DJIMotor_GetData(SMALLYAWMotor).speed_rpm * 6.0f;
-            Gimbal.yaw.current = PID_Cal(&Gimbal.yaw.spd_pid, enc_spd, cmd);
+            yaw.current = PID_Cal(&yaw.spd_pid, enc_spd, cmd);
         }
         else
         {
-            // 非跟踪非扫描: 手动位置控制
-            Gimbal.yaw.spd_set = PID_Cal(&Gimbal.yaw.pos_pid, Gimbal.yaw.pos_now, Gimbal.yaw.pos_set);
-            Gimbal.yaw.current = PID_Cal(&Gimbal.yaw.spd_pid, Gimbal.yaw.spd_now, Gimbal.yaw.spd_set);
+            // 场景B: 手动模式 → 位置环输出速度指令 → 速度环输出电流
+            yaw.spd_set = PID_Cal(&yaw.pos_pid, yaw.pos_now, yaw.pos_set);
+            yaw.current = PID_Cal(&yaw.spd_pid, yaw.spd_now, yaw.spd_set);
         }
     }
     else
     { 
-        // 跟踪态: 视觉前馈 + 大yaw前馈 注入串级外环
+        // 场景C: 自瞄跟踪 → 自瞄位置环 + 视觉前馈 → 自瞄速度环
         float yaw_ff = rad2degree(Global.Auto.input.yaw_ff);
-        if (fabsf(yaw_ff) > aa_yaw_ff_max_deg_s) yaw_ff = 0.0f;
+        if (fabsf(yaw_ff) > yaw_ff_max_deg_s) yaw_ff = 0.0f;
 
-        Gimbal.yaw.spd_set = PID_Cal(&Gimbal.yaw.auto_pos_pid,
-                                      Gimbal.yaw.pos_now, Gimbal.yaw.pos_set)
-                            + yaw_ff + GetBigYawFF_DegS();
+        // 速度指令 = 位置环输出 + 视觉角速度前馈 + 大Yaw前馈
+        yaw.spd_set = PID_Cal(&yaw.auto_pos_pid,
+                              yaw.pos_now, yaw.pos_set)
+                    + yaw_ff + getBigYawFF_DegS();
 
-        Gimbal.yaw.current = PID_Cal(&Gimbal.yaw.auto_spd_pid,
-                                      Gimbal.yaw.spd_now, Gimbal.yaw.spd_set);
+        yaw.current = PID_Cal(&yaw.auto_spd_pid,
+                              yaw.spd_now, yaw.spd_set);
     }
 #endif
 }
 
+/*-------------------- Private: control --------------------*/
 
 /**
- * @brief  电流值设置 / 电机输出
- * @note   处理模式切换瞬间的防跳变逻辑, 重力补偿, MIT/LQR控制输出
+ * @brief  云台电机输出控制
+ * @note   根据全局模式决定是否输出力矩/电流:
+ *         - LOCK模式: 所有电机零输出 (云台自由落体)
+ *         - 非LOCK:
+ *           * Pitch: MIT力矩模式, 含重力补偿+积分修正
+ *           * Yaw:   GM6020电流模式, 含模式切换防突跳处理
+ *
+ *         模式切换防突跳逻辑:
+ *         - LOCK→非LOCK: 将目标对齐当前值, 清零积分
+ *         - 底盘模式变化: 重置Yaw目标防止累积误差导致甩头
  */
-void Control()
+void GimbalController::control()
 {
-    static uint8_t last_mode = LOCK;
-    static uint8_t last_chassis_mode = FLOW_Chassis;
-    static uint8_t first_run = 1;
-
-    // 第一帧初始化 last_mode
-    if (first_run)
+    // 首次运行: 记录初始模式, 避免首帧误判为"模式切换"
+    if (first_run_)
     {
-        last_mode = Global.Control.mode;
-        last_chassis_mode = Global.Chassis.mode;
-        first_run = 0;
+        last_mode_ = Global.Control.mode;
+        last_chassis_mode_ = Global.Chassis.mode;
+        first_run_ = 0;
     }
 
     if (Global.Control.mode != LOCK)
     {
-        // 判断小yaw是否需要泄力 (FLOW_Chassis无自瞄 / FLOW_Gimbal 都泄力)
+        /* ---- Yaw释放条件判断 ---- */
+        // yaw_release=1: 小yaw不输出力矩, 让底盘自由跟随
+        // 条件: (底盘跟随且无自瞄) 或 (云台跟随模式)
         uint8_t yaw_release =
             ((Global.Chassis.mode == FLOW_Chassis && Global.Auto.mode == NONE) ||
              (Global.Chassis.mode == FLOW_Gimbal));
 
-        // 从FLOW_Chassis或FLOW_Gimbal切出的瞬间: 同步目标位置为当前位置, 防止跳变
-        if ((last_chassis_mode == FLOW_Chassis && !yaw_release) ||
-            (last_chassis_mode == FLOW_Gimbal && Global.Chassis.mode != FLOW_Gimbal))
+        /* ---- 底盘模式切换 → 重置Yaw ---- */
+        // 从底盘跟随切到非释放 / 从云台跟随切出: 清零积分, 对齐目标
+        if ((last_chassis_mode_ == FLOW_Chassis && !yaw_release) ||
+            (last_chassis_mode_ == FLOW_Gimbal && Global.Chassis.mode != FLOW_Gimbal))
         {
-            Global.Gimbal.input.yaw = Gimbal.yaw.pos_now;
-            Gimbal.yaw.pos_set = Gimbal.yaw.pos_now;
-            // 清空速度环积分, 防止切模式时积累量导致冲击
-            Gimbal.yaw.spd_pid.i_out = 0;
-            Gimbal.yaw.auto_spd_pid.i_out = 0;
-            LQR_Reset(&Gimbal.yaw.lqr);
-            LQR_Reset(&Gimbal.yaw.lqr_auto);
+            Global.Gimbal.input.yaw = yaw.pos_now;
+            yaw.pos_set = yaw.pos_now;
+            yaw.spd_pid.i_out = 0;
+            yaw.auto_spd_pid.i_out = 0;
+            LQR_Reset(&yaw.lqr);
+            LQR_Reset(&yaw.lqr_auto);
         }
 
-        // 重力补偿前馈力矩 (cos模型)
-        Gimbal.pitch.grav_comp = Gimbal.pitch.k_gravity * cos(Gimbal.pitch.pos_now);
+        /* ---- Pitch重力补偿 ---- */
+        // 静态力矩: τ = k × cos(θ), θ为当前Pitch角(rad)
+        pitch.grav_comp = pitch.k_gravity * cos(pitch.pos_now);
 
-        if (Gimbal.pitch.inited == 1)
+        if (pitch.inited == 1)
         {
-             // 从LOCK模式切换出来的瞬间: 同步目标值, 防止跳变
-             if (last_mode == LOCK)
+             /* ---- LOCK→解锁 过渡处理 ---- */
+             if (last_mode_ == LOCK)
              {
+                // 将目标对齐当前, 防止解锁瞬间大角度突跳
                 Global.Gimbal.input.pitch = -imu_gimbal.pitch;
-                Gimbal.pitch.pos_set = degree2rad(Global.Gimbal.input.pitch);
+                pitch.pos_set = degree2rad(Global.Gimbal.input.pitch);
                 Global.Gimbal.input.yaw = imu_gimbal.yaw_cnt;
-                Gimbal.yaw.pos_set = Global.Gimbal.input.yaw;
-                // LOCK→解锁瞬间清零积分, 防止历史积累造成冲击
-                Gimbal.pitch.grav_integral = 0.0f;
-                LQR_Reset(&Gimbal.yaw.lqr);
-                LQR_Reset(&Gimbal.yaw.lqr_auto);
+                yaw.pos_set = Global.Gimbal.input.yaw;
+                // 清零积分补偿, 防止解锁时积累的积分引起过冲
+                pitch.grav_integral = 0.0f;
+                LQR_Reset(&yaw.lqr);
+                LQR_Reset(&yaw.lqr_auto);
              }
 
-             // 积分力矩补偿: 缓慢消除 k_gravity 标定不准 / 静摩擦 导致的稳态偏差
-             float err = Gimbal.pitch.pos_set - Gimbal.pitch.pos_now;
-             Gimbal.pitch.grav_integral += Gimbal.pitch.ki_grav * err * kCtrlDt;
-             Gimbal.pitch.grav_integral = Clamp(Gimbal.pitch.grav_integral,
-                                                -Gimbal.pitch.grav_int_limit,
-                                                 Gimbal.pitch.grav_int_limit);
+             /* ---- Pitch重力积分补偿 ---- */
+             // 用位置误差积分修正重力补偿系数的标定偏差
+             float err = pitch.pos_set - pitch.pos_now;
+             pitch.grav_integral += pitch.ki_grav * err * kCtrlDt;
+             pitch.grav_integral = clamp(pitch.grav_integral,
+                                         -pitch.grav_int_limit,
+                                          pitch.grav_int_limit);
 
-             // 总前馈力矩 = cos模型 + 积分修正
-             float torque_ff = Gimbal.pitch.grav_comp + Gimbal.pitch.grav_integral;
-             // 目标位置加上Offset, 转换到电机坐标系
-             float target_motor = Gimbal.pitch.pos_set + Gimbal.pitch.offset;
+             // 总前馈力矩 = 静态重力 + 积分修正
+             float torque_ff = pitch.grav_comp + pitch.grav_integral;
+             // 电机端目标位置 = IMU目标角(rad) + 零位偏移
+             float target_motor = pitch.pos_set + pitch.offset;
              
-             // 自瞄时注入速度前馈
+             // 自瞄跟踪时叠加视觉Pitch速度前馈
              float vel_ff = 0;
              if (AutoAim_IsTracking())
                  vel_ff = Global.Auto.input.pitch_ff;
 
 #if PITCH_USE_LQR
-             // LQR 外环: IMU角度/角速度状态反馈, 重力补偿作为 u_ff 注入
-             float lqr_torque = LQR_Calc(&Gimbal.pitch.lqr,
-                 Gimbal.pitch.pos_now, Gimbal.pitch.spd_now,
-                 Gimbal.pitch.pos_set, vel_ff, torque_ff);
+             /* ---- Pitch LQR 路径 ---- */
+             // LQR输出纯力矩, 位置/速度由LQR状态反馈控制
+             float lqr_torque = LQR_Calc(&pitch.lqr,
+                 pitch.pos_now, pitch.spd_now,
+                 pitch.pos_set, vel_ff, torque_ff);
 
+             // MIT模式: pos=target(位置前馈), vel=0, torque=LQR输出, kp=0, kd=0
              DMMotor_Set(PITCHMotor, target_motor, 0.0f, lqr_torque, 0.0f, 0.0f);
 #else
-             // MIT 位置+速度+力矩混合控制
+             /* ---- Pitch MIT 经典路径 ---- */
+             // MIT模式: pos=target, vel=前馈, torque=重力补偿, kp/kd=刚度阻尼
              DMMotor_Set(PITCHMotor, target_motor, vel_ff, torque_ff,
-                         Gimbal.pitch.kp, Gimbal.pitch.kd);
+                         pitch.kp, pitch.kd);
 #endif
         }
         else
         {
+             // Pitch未校准: 零输出等待首帧数据
              DMMotor_Set(PITCHMotor, 0, 0, 0, 0, 0.0f); 
         }
         
-        // 小yaw: 泄力模式下不输出
+        /* ---- 小Yaw输出 ---- */
         if (yaw_release)
-            DJIMotor_Set(0, SMALLYAWMotor);
+            DJIMotor_Set(0, SMALLYAWMotor);         // 释放: 零电流
         else
-            DJIMotor_Set(Gimbal.yaw.current, SMALLYAWMotor); 
+            DJIMotor_Set(yaw.current, SMALLYAWMotor); // 正常: 输出解算电流
     }
     else
     {
+        /* ---- LOCK模式: 全部零输出 ---- */
         DMMotor_Set(PITCHMotor, 0, 0, 0, 0, 0);
         DJIMotor_Set(0, SMALLYAWMotor);
     }
    
-    last_mode = Global.Control.mode;
-    last_chassis_mode = Global.Chassis.mode;
+    // 记录本帧模式, 供下帧检测模式切换
+    last_mode_ = Global.Control.mode;
+    last_chassis_mode_ = Global.Chassis.mode;
 }
 
-} // namespace (internal)
-
-/*-------------------- Task --------------------*/
+/*-------------------- Public: task --------------------*/
 
 /**
- * @brief  云台任务 (1kHz 调用)
+ * @brief  云台控制主任务入口 (1kHz)
+ * @note   由FreeRTOS的Gimbal_Task每1ms调用一次
+ *         执行顺序: update(状态更新) → calculate(解算) → control(输出)
+ *         USE_GIMBAL=0 时整个云台控制被编译裁剪
  */
-void Gimbal_Tasks(void)
+void GimbalController::task()
 {
 #if (USE_GIMBAL != 0)
-    Update();
-    Calculate();
-    Control();
+    update();    
+    calculate();   
+    control();   
 #endif
 }
 
-/*-------------------- Set --------------------*/
+/*-------------------- Public: setPitchAngle --------------------*/
 
 /**
- * @brief 设置云台Pitch轴角度 (带限位)
+ * @brief  设置Pitch目标角度 (带限幅保护)
+ * @param  angle  目标角度 (度), 正值抬头, 负值低头
+ * @note   限幅范围: [PITCHI_MIN_ANGLE, PITCHI_MAX_ANGLE]
+ *         由遥控器解析或自瞄模块调用
  */
-void Gimbal_SetPitchAngle(float angle)
+void GimbalController::setPitchAngle(float angle)
 {
-    Global.Gimbal.input.pitch = Clamp(angle, (float)PITCHI_MIN_ANGLE, (float)PITCHI_MAX_ANGLE);
+    Global.Gimbal.input.pitch = clamp(angle, (float)PITCHI_MIN_ANGLE, (float)PITCHI_MAX_ANGLE);
 }
 
+/*-------------------- Public: setYawAngle --------------------*/
+
 /**
- * @brief 设置云台Yaw轴角度
+ * @brief  设置Yaw目标角度 (无限幅, 连续累计)
+ * @param  angle  目标角度 (度), 使用IMU连续计数坐标系
+ * @note   不做限幅: Yaw轴可无限旋转 (连续计数不归零)
+ *         由遥控器解析或自瞄模块调用
  */
-void Gimbal_SetYawAngle(float angle)
+void GimbalController::setYawAngle(float angle)
 {
     Global.Gimbal.input.yaw = angle;
+}
+
+/* ============================================================
+ *  C兼容包装函数 (供FreeRTOS任务 / C源文件调用)
+ *  由于 freertos.c 等文件以C编译, 无法直接调用C++成员函数,
+ *  因此提供以下 extern "C" 包装, 内部转发给类实例.
+ * ============================================================ */
+
+void Gimbal_Init()          { Gimbal.init(); }
+void Gimbal_Tasks()         { Gimbal.task(); }
+void Gimbal_SetPitchAngle(float angle) { Gimbal.setPitchAngle(angle); }
+void Gimbal_SetYawAngle(float angle)   { Gimbal.setYawAngle(angle); }
+void Gimbal_Limit(float pitch_up, float pitch_down, float yaw_l, float yaw_r)
+{
+    Gimbal.limit(pitch_up, pitch_down, yaw_l, yaw_r);
 }
 

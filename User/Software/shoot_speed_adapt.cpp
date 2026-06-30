@@ -8,11 +8,24 @@
 #include "bsp_flash.hpp"
 #include "referee_system.hpp"
 
-static float   speed_queue[SPEED_QUEUE_SIZE]; // 环形队列
-static uint8_t queue_idx   = 0;              // 写入位置
-static uint8_t queue_count = 0;              // 已有数据量
-static float   last_speed  = 0;              // 上一次记录的弹速
-static int16_t speed_offset = 0;             // 当前摩擦轮转速偏移量 (RPM)
+namespace {
+float   speed_queue[kSpeedQueueSize]; // 环形队列
+uint8_t queue_idx   = 0;              // 写入位置
+uint8_t queue_count = 0;              // 已有数据量
+float   last_speed  = 0;              // 上一次记录的弹速
+int16_t speed_offset = 0;             // 当前摩擦轮转速偏移量 (RPM)
+
+/**
+ * @brief  将偏移量写入Flash
+ */
+void save_offset_to_flash(void)
+{
+    Flash_UserData_t data = {0};
+    data.valid_flag = FLASH_DATA_VALID_FLAG;
+    data.shoot_speed_offset = speed_offset;
+    BSP_Flash_Write(&data);
+}
+} // namespace
 
 /**
  * @brief  初始化：从Flash恢复上次的偏移量
@@ -33,17 +46,6 @@ void ShootSpeedAdapt_Init(void)
 }
 
 /**
- * @brief  将偏移量写入Flash
- */
-static void save_offset_to_flash(void)
-{
-    Flash_UserData_t data = {0};
-    data.valid_flag = FLASH_DATA_VALID_FLAG;
-    data.shoot_speed_offset = speed_offset;
-    BSP_Flash_Write(&data);
-}
-
-/**
  * @brief  周期调用（建议在发射任务中调用）
  * @note   自动检测新弹丸射速，填入队列，满10发后计算均值并判断是否调整
  */
@@ -61,33 +63,33 @@ void ShootSpeedAdapt_Update(void)
 
     /* 2. 压入环形队列 */
     speed_queue[queue_idx] = cur_speed;
-    queue_idx = (queue_idx + 1) % SPEED_QUEUE_SIZE;
-    if (queue_count < SPEED_QUEUE_SIZE)
+    queue_idx = (queue_idx + 1) % kSpeedQueueSize;
+    if (queue_count < kSpeedQueueSize)
         queue_count++;
 
     /* 3. 队列未满，不做判断 */
-    if (queue_count < SPEED_QUEUE_SIZE)
+    if (queue_count < kSpeedQueueSize)
         return;
 
     /* 4. 计算10发均值 */
     float sum = 0;
-    for (uint8_t i = 0; i < SPEED_QUEUE_SIZE; i++)
+    for (uint8_t i = 0; i < kSpeedQueueSize; i++)
         sum += speed_queue[i];
-    float avg = sum / (float)SPEED_QUEUE_SIZE;
+    float avg = sum / (float)kSpeedQueueSize;
 
     /* 5. 阈值判断并调整 */
-    if (avg > SPEED_HIGH_THRESH)
+    if (avg > kSpeedHighThresh)
     {
-        speed_offset -= SPEED_ADJUST_STEP;
-        if (speed_offset < SPEED_OFFSET_MIN)
-            speed_offset = SPEED_OFFSET_MIN;
+        speed_offset -= kSpeedAdjustStep;
+        if (speed_offset < kSpeedOffsetMin)
+            speed_offset = kSpeedOffsetMin;
         save_offset_to_flash();
     }
-    else if (avg < SPEED_LOW_THRESH)
+    else if (avg < kSpeedLowThresh)
     {
-        speed_offset += SPEED_ADJUST_STEP;
-        if (speed_offset > SPEED_OFFSET_MAX)
-            speed_offset = SPEED_OFFSET_MAX;
+        speed_offset += kSpeedAdjustStep;
+        if (speed_offset > kSpeedOffsetMax)
+            speed_offset = kSpeedOffsetMax;
         save_offset_to_flash();
     }
     /* 23~24 m/s 之间不调整 */

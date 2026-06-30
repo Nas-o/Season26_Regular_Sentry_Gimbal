@@ -1,8 +1,8 @@
 /*
  * @Date: 2025-08-31 21:36:57
  * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-05-18 11:40:51
- * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.h
+ * @LastEditTime: 2026-06-20 04:29:54
+ * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.hpp
  */
 #ifndef __AUTO_CONTROL_H__
 
@@ -112,31 +112,34 @@ void STM32_to_MINIPC();
  * @brief 机器人运行模式 (下位机 -> 上位机)
  * @author Nas(1319621819@qq.ocm)
  */
-typedef enum {
+typedef enum 
+{
     MODE_IDLE       = 0, // 空闲
     MODE_AUTO_AIM   = 1, // 自瞄
     MODE_SMALL_BUFF = 2, // 小符
     MODE_BIG_BUFF   = 3, // 大符
     MODE_OUTPOST    = 4  // 前哨站 (保留)
-} RobotMode_e;
+} RobotMode;
 
 
 /**
  * @brief 视觉控制模式 (上位机 -> 下位机)
  * @author Nas(1319621819@qq.ocm)
  */
-typedef enum {
+typedef enum 
+{
     CTRL_NO_CONTROL     = 0, // 不控制
     CTRL_AIM_ONLY       = 1, // 控制云台但不开火
     CTRL_AIM_AND_FIRE   = 2  // 控制云台且开火
-} VisionControlMode_e;
+} VisionControlMode;
 
 
 /**
  * @brief 上位机发送给STM32的数据 (MiniPC -> STM32)
  * @author Nas(1319621819@qq.ocm)
  */
-typedef struct {
+typedef struct 
+{
     uint8_t header[2] ;   // 帧头 (固定值 {'S', 'P'})
 
     uint8_t mode;        // 控制模式 (VisionControlMode_e)
@@ -148,9 +151,10 @@ typedef struct {
     float pitch;         // 俯仰角 (rad)
     float pitch_vel;     // 俯仰角速度 (rad/s)
     float pitch_acc;     // 俯仰角加速度 (rad/s^2) 
+    
 
-    float center_yaw;    // yaw轴旋转中心
-    //float distance;      // 目标到相机距离
+    //float center_yaw;    // yaw轴旋转中心
+    float distance;      // 目标到相机距离
 
     uint16_t crc16;      // CRC16 校验
 } MINIPC_data_t;
@@ -159,7 +163,8 @@ typedef struct {
  * @brief STM32发送给上位机的数据 (STM32 -> MiniPC)
  * @author Nas(1319621819@qq.ocm)
  */
-typedef struct {
+typedef struct 
+{
     uint8_t header[2];   // 帧头 (固定值 {'S', 'P'})
 
     uint8_t mode;        // 当前模式 (RobotMode_e)
@@ -175,6 +180,7 @@ typedef struct {
 
     // --- 射击状态 ---
     float bullet_speed;      // 弹速 (m/s)
+    uint8_t enemy_color;
     uint16_t bullet_count;   // 子弹累计发送次数 (用于统计/丢包检测)
 
     uint16_t crc16;      // CRC16 校验
@@ -268,26 +274,26 @@ typedef struct
  */
 typedef struct
 {
-    uint8_t game_type;               // 比赛类型 (1=7v7, 4=3v3...)
-    uint8_t game_progress;           // 比赛阶段 (0未开始, 4进行中, 5结算)
-    uint8_t launching_frequency;     // 发射频率限制 (Hz)
-    uint16_t current_HP;             // 当前血量
-    uint16_t maximum_HP;             // 最大血量
-    uint16_t stage_remain_time;      // 当前阶段剩余时间 (s)
+    uint8_t game_type;                  // 比赛类型 (1=7v7, 4=3v3...)
+    uint8_t game_progress;              // 比赛阶段 (0未开始, 4进行中, 5结算)
+    uint8_t launching_frequency;        // 发射频率限制 (Hz)
+    uint16_t current_HP;                // 当前血量
+    uint16_t maximum_HP;                // 最大血量
+    uint16_t stage_remain_time;         // 当前阶段剩余时间 (s)
     uint16_t projectile_allowance_17mm; // 17mm弹丸允许发射量
-    uint16_t outpost_HP;             // 己方前哨站血量
-    uint16_t base_HP;                // 己方基地血量
-    uint32_t rfid_status;            // RFID状态位
-    uint32_t initial_speed;          // 枪口初速度 (mm/s, 裁判系统原始值)
+    uint16_t outpost_HP;                // 己方前哨站血量
+    uint16_t base_HP;                   // 己方基地血量
+    uint32_t rfid_status;               // RFID状态位
+    uint32_t initial_speed;             // 枪口初速度 (mm/s, 裁判系统原始值)
     
-    uint32_t last_update_tick;       // 最后一次收到CAN帧的时间戳 (ms)
-    uint8_t  online;                 // 在线标志: 1=在线, 0=离线/超时
+    uint32_t last_update_tick;          // 最后一次收到CAN帧的时间戳 (ms)
+    uint8_t  online;                    // 在线标志: 1=在线, 0=离线/超时
 } Referee_data_t;
 
 #define REFEREE_CAN_TIMEOUT_MS  200  // 裁判系统CAN数据超时阈值 (ms)
 
 /**
- * @brief 自瞄状态机 — 上位机 mode 决策, 下位机只做链路保底+执行
+ * @brief 自瞄状态机 — 上位机 mode 做决策, 下位机只做链路保底+执行
  */
 typedef enum {
     AIM_OFF        = 0,   // 自瞄关闭 (遥控手动)
@@ -359,18 +365,16 @@ extern Sentry_cmd_t Sentry_cmd_1;            // 哨兵决策指令缓冲
 extern Referee_data_t Referee;               // 裁判系统数据 (从底盘板CAN接收)
 
 /* ---- 外部变量: 自瞄状态 ---- */
-extern AutoAim_t AA;                         // 自瞄全局状态机
+extern AutoAim_t AutoAim;                         // 自瞄全局状态机
 extern volatile uint32_t relative_timeout_ms; // 对板相对角度超时阈值 (ms)
 extern volatile uint32_t relative_tick;      // 最后一次收到相对角度的时刻
-extern volatile uint32_t relative_lost;      // 相对角度丢失计数
-extern volatile uint8_t  relative_seq;       // 相对角度帧序号 (用于丢包检测)
 
 /* ---- 可调阈值 (定义在 Auto_control.cpp, 可通过vofa+在线调) ---- */
-extern float aa_big_yaw_ff_gain;             // 大yaw前馈增益 (0=关闭)
-extern float aa_big_yaw_ff_max_deg_s;        // 大yaw前馈限幅 (deg/s)
-extern uint32_t aa_rx_timeout_ms;            // 自瞄链路超时判定 (ms)
-extern float    aa_yaw_reject_deg;           // yaw偏差超过此值拒绝该帧 (deg)
-extern float    aa_yaw_ff_max_deg_s;         // 视觉yaw前馈限幅 (deg/s)
+extern float big_yaw_ff_gain;             // 大yaw前馈增益 (0=关闭)
+extern float big_yaw_ff_max_deg_s;        // 大yaw前馈限幅 (deg/s)
+extern uint32_t rx_timeout_ms;            // 自瞄链路超时判定 (ms)
+extern float    yaw_reject_deg;           // yaw偏差超过此值拒绝该帧 (deg)
+extern float    yaw_ff_max_deg_s;         // 视觉yaw前馈限幅 (deg/s)
 
 /* ---- 通信丢包检测 ---- */
 extern uint32_t lost_pkg_cnt[4];              // 各通道丢包计数
