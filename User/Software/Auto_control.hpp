@@ -322,6 +322,8 @@ typedef struct
     float    scan_offset;           // 相对大yaw的扫描偏移 (deg)
     int8_t   scan_yaw_dir;
     uint8_t  scan_init_done;
+    uint8_t  scan_yaw_braking;      // 1=端点零速等待
+    uint16_t scan_yaw_zero_count;   // 连续低速拍数
 
     /* ---- 规划输出 ---- */
     float    target_yaw;
@@ -334,6 +336,12 @@ typedef struct
     float    dbg_yaw_ff_deg_s;
     float    dbg_encoder_relative;
     float    dbg_mcu_fire_permit;
+    float    dbg_scan_spd_set_deg_s;
+    float    dbg_scan_spd_now_deg_s;
+    float    dbg_scan_pid_p;
+    float    dbg_scan_pid_i;
+    float    dbg_scan_pid_d;
+    float    dbg_scan_pid_out;
 } AutoAim_t;
 
 #pragma pack(4)
@@ -375,6 +383,7 @@ extern float big_yaw_ff_max_deg_s;        // 大yaw前馈限幅 (deg/s)
 extern uint32_t rx_timeout_ms;            // 自瞄链路超时判定 (ms)
 extern float    yaw_reject_deg;           // yaw偏差超过此值拒绝该帧 (deg)
 extern float    yaw_ff_max_deg_s;         // 视觉yaw前馈限幅 (deg/s)
+extern float    aa_scan_yaw_accel_deg_s2; // 扫描yaw启动加速度 (deg/s^2)
 
 /* ---- 通信丢包检测 ---- */
 extern uint32_t lost_pkg_cnt[4];              // 各通道丢包计数

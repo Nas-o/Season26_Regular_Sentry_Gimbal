@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas-o 1319621819@qq.com
- * @LastEditTime: 2026-07-17 23:38:40
+ * @LastEditTime: 2026-07-18 02:33:53
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.cpp
  */
 
@@ -53,8 +53,8 @@ uint8_t RelativeAngle_IsFresh(void)
 }
 float aa_scan_yaw_limit_deg  = 45.0f; // 扫描yaw幅度 (deg)
 float aa_scan_yaw_speed_deg_s = SCAN_YAW_SPEED; // 扫描yaw速度 (deg/s)
-float aa_scan_yaw_step_deg   = 0.16f; // 扫描yaw位置步长 (deg/tick)
 float aa_scan_pitch_step_deg = 0.15f; // 扫描pitch步长 (deg/tick)
+float aa_scan_yaw_accel_deg_s2 = 1200.0f; // 扫描yaw启动加速度 (deg/s^2)
 
 uint8_t Debug_Sentry_Revive_State = 0;
 uint32_t Debug_Sentry_Tx_Count = 0;
@@ -322,12 +322,20 @@ void Scan_Internal(void)
 {
     const float PITCH_MAX = 20.0f;
     const float PITCH_MIN = PITCHI_MIN_ANGLE;
-    float small_yaw_relative_now = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+    const float SCAN_DT = 0.001f;
+    const float YAW_ZERO_SPEED_DEG_S = 8.0f;
+    const uint16_t YAW_ZERO_HOLD_TICKS = 10;
+    DJI_motor_data_s small_yaw = DJIMotor_GetData(SMALLYAWMotor);
+    Gimbal.yaw.pos_rel = (float)small_yaw.angle;
+    Gimbal.yaw.spd_rel = (float)small_yaw.speed_rpm * 6.0f;
+    float small_yaw_relative_now = Gimbal.yaw.pos_rel;
     /* 初始同步 */
     if (!AutoAim.scan_init_done) {
         AutoAim.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
         AutoAim.scan_offset = 0.0f;
         AutoAim.scan_yaw_dir = -1;
+        AutoAim.scan_yaw_braking = 0;
+        AutoAim.scan_yaw_zero_count = 0;
         AutoAim.scan_init_done = 1;
     }
 
@@ -349,33 +357,84 @@ void Scan_Internal(void)
     Global.Gimbal.input.pitch = AutoAim.scan_pitch_deg;
     Gimbal.pitch.pos_set = degree2rad(AutoAim.scan_pitch_deg);
 
-    /* 小Yaw扫描：直接速度控制 */
+    /* 小Yaw扫描：到达端点后先制动到零，再反向启动 */
     AutoAim.scan_offset = small_yaw_relative_now;
-    float scan_yaw_speed_deg_s = 0.0f;
-/*     if (toMINIPC.mode == MODE_AUTO_AIM)
-    { */
-        if (small_yaw_relative_now >= aa_scan_yaw_limit_deg)
-            AutoAim.scan_yaw_dir = -1;
-        else if (small_yaw_relative_now <= -aa_scan_yaw_limit_deg)
-            AutoAim.scan_yaw_dir = 1;
-        scan_yaw_speed_deg_s = aa_scan_yaw_speed_deg_s;
-/*     }
+    if (!AutoAim.scan_yaw_braking)
+    {
+        uint8_t reached_endpoint =
+            (AutoAim.scan_yaw_dir > 0)
+                ? (Gimbal.yaw.pos_rel >= aa_scan_yaw_limit_deg)
+                : (Gimbal.yaw.pos_rel <= -aa_scan_yaw_limit_deg);
+
+        if (reached_endpoint)
+        {
+            AutoAim.scan_yaw_braking = 1;
+            AutoAim.scan_yaw_zero_count = 0;
+            Gimbal.yaw.spd_set = 0.0f;
+            PID_Reset(&Gimbal.yaw.spd_pid, Gimbal.yaw.spd_rel, 0.0f);
+        }
+        else
+        {
+            float next_spd_set = AutoAim.scan_yaw_dir * aa_scan_yaw_speed_deg_s;
+
+            // 按剩余距离规划速度：v=sqrt(2*a*s)。
+            float remaining_deg = (AutoAim.scan_yaw_dir > 0)
+                                ? aa_scan_yaw_limit_deg - Gimbal.yaw.pos_rel
+                                : Gimbal.yaw.pos_rel + aa_scan_yaw_limit_deg;
+            remaining_deg = fmaxf(remaining_deg, 0.0f);
+            float planned_speed = sqrtf(2.0f * aa_scan_yaw_accel_deg_s2 * remaining_deg);
+            if (planned_speed < aa_scan_yaw_speed_deg_s)
+                next_spd_set = planned_speed * (float)AutoAim.scan_yaw_dir;
+
+            float max_speed_step = aa_scan_yaw_accel_deg_s2 * SCAN_DT;
+            float speed_delta = next_spd_set - Gimbal.yaw.spd_set;
+            if (speed_delta > max_speed_step) speed_delta = max_speed_step;
+            if (speed_delta < -max_speed_step) speed_delta = -max_speed_step;
+            Gimbal.yaw.spd_set += speed_delta;
+        }
+    }
     else
     {
-        AutoAim.scan_yaw_dir = 0;
-    } */
-    
+        Gimbal.yaw.spd_set = 0.0f;
 
-    Gimbal.yaw.spd_set = AutoAim.scan_yaw_dir * scan_yaw_speed_deg_s;
+        if (fabsf(Gimbal.yaw.spd_rel) <= YAW_ZERO_SPEED_DEG_S)
+            AutoAim.scan_yaw_zero_count++;
+        else
+            AutoAim.scan_yaw_zero_count = 0;
+
+        if (AutoAim.scan_yaw_zero_count >= YAW_ZERO_HOLD_TICKS)
+        {
+            AutoAim.scan_yaw_dir = -AutoAim.scan_yaw_dir;
+            AutoAim.scan_yaw_braking = 0;
+            AutoAim.scan_yaw_zero_count = 0;
+            PID_Reset(&Gimbal.yaw.spd_pid, Gimbal.yaw.spd_rel, 0.0f);
+        }
+    }
 
 }
 
 void Scan_Reset_Internal(void)
 {
+    DJI_motor_data_s small_yaw = DJIMotor_GetData(SMALLYAWMotor);
     AutoAim.scan_init_done = 0;
     AutoAim.scan_pitch_deg = rad2degree(Gimbal.pitch.pos_now);
     AutoAim.scan_offset    = 0.0f;
     AutoAim.scan_yaw_dir   = 0;
+    AutoAim.scan_yaw_braking = 0;
+    AutoAim.scan_yaw_zero_count = 0;
+    Gimbal.yaw.spd_set     = 0.0f;
+    PID_Reset(&Gimbal.yaw.spd_pid,
+              (float)small_yaw.speed_rpm * 6.0f, 0.0f);
+}
+
+void Scan_StopYaw_Internal(void)
+{
+    DJI_motor_data_s small_yaw = DJIMotor_GetData(SMALLYAWMotor);
+    AutoAim.scan_yaw_braking = 0;
+    AutoAim.scan_yaw_zero_count = 0;
+    Gimbal.yaw.spd_set = 0.0f;
+    PID_Reset(&Gimbal.yaw.spd_pid,
+              (float)small_yaw.speed_rpm * 6.0f, 0.0f);
 }
 
 /**
@@ -405,6 +464,7 @@ void EdgeAction_Update(void)
 void Planner_Update(void)
 {
     uint8_t auto_enabled = (Global.Auto.mode != NONE);
+    uint8_t was_scanning = AutoAim.is_scanning;
 
     if (!auto_enabled) 
     {
@@ -432,6 +492,9 @@ void Planner_Update(void)
         AutoAim.is_scanning = 1;
     }
 
+    if (was_scanning && !AutoAim.is_scanning)
+        Scan_StopYaw_Internal();
+
     /* 清除冻结标志 */
     AutoAim.reacquire_freeze = 0;
 }
@@ -455,11 +518,12 @@ void FireGate_Update(void)
  */
 void DebugFill_Update(void)
 {
+    DJI_motor_data_s small_yaw = DJIMotor_GetData(SMALLYAWMotor);
     AutoAim.dbg_yaw_target_raw_deg = rad2degree(Global.Auto.input.shoot_yaw);
     if (AutoAim_IsScanning())
     {
         AutoAim.dbg_yaw_cmd_deg = AutoAim.scan_offset;
-        AutoAim.dbg_yaw_now_deg = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+        AutoAim.dbg_yaw_now_deg = (float)small_yaw.angle;
     }
     else
     {
@@ -468,8 +532,14 @@ void DebugFill_Update(void)
     }
 
     AutoAim.dbg_yaw_ff_deg_s       = rad2degree(Global.Auto.input.yaw_ff);
-    AutoAim.dbg_encoder_relative   = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
+    AutoAim.dbg_encoder_relative   = (float)small_yaw.angle;
     AutoAim.dbg_mcu_fire_permit    = (float)Global.Shoot.mcu_fire_permit;
+    AutoAim.dbg_scan_spd_set_deg_s = Gimbal.yaw.spd_set;
+    AutoAim.dbg_scan_spd_now_deg_s = (float)small_yaw.speed_rpm * 6.0f;
+    AutoAim.dbg_scan_pid_p         = Gimbal.yaw.spd_pid.p_out;
+    AutoAim.dbg_scan_pid_i         = Gimbal.yaw.spd_pid.i_out;
+    AutoAim.dbg_scan_pid_d         = Gimbal.yaw.spd_pid.d_out;
+    AutoAim.dbg_scan_pid_out       = Gimbal.yaw.spd_pid.total_out;
 }
 } // namespace
 

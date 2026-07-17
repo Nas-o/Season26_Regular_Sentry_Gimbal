@@ -147,7 +147,7 @@ void DJIMotor_DecodeCandata(FDCAN_HandleTypeDef *hfdcan, uint32_t id, uint8_t *d
 {
     if (id < CAN_ID1)
         return;
-    if (id - CAN_ID1 <= 11) // 防止数组溢出
+    if (id - CAN_ID1 < QUANTITY_OF_DJIMOTOR) // 防止数组溢出
     {
         if (hfdcan == &hfdcan1)
         {

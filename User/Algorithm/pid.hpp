@@ -23,7 +23,7 @@ typedef struct // PID控制数据结构体
 
 void PID_Set(pid_t *PidSet, float p_set, float i_set, float d_set, float f_set, float lim_out_set, float lim_i_outset); // PID设置
 float PID_Cal(pid_t *PidGoal, float Now, float Set);                                                       // PID计算
-
+void PID_Reset(pid_t *pid, float now, float set);
 
 #ifdef __cplusplus
 }

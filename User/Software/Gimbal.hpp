@@ -13,12 +13,7 @@ extern "C"
     #include "CAN_receive_send.hpp"
     #include "pid.hpp"
     #include "ramp_generator.hpp"
-    #include "lqr_controller.hpp"
     #include "motor.hpp"
-
-    /* -------- 控制策略开关 -------- */
-    #define SMALL_YAW_USE_LQR  0   // 小yaw: 0=PID, 1=LQR/LQI
-    #define PITCH_USE_LQR      0   // Pitch外环: 0=MIT-PD, 1=LQR+MIT
 
     /* -------- 电机参数 -------- */
     #define GIMBAL_MAX_CURRENT MAX_CURRENT
@@ -63,7 +58,6 @@ struct PitchAxis
     float ki_grav = 0;      // 积分增益
     float grav_int_limit = 0;// 积分限幅 (N·m)
 
-    LQR_Controller_t lqr;   // LQR外环 (PITCH_USE_LQR=1时生效)
 };
 
 /** @brief Yaw轴数据 */
@@ -75,15 +69,15 @@ struct YawAxis
     pid_t auto_spd_pid;      // 自瞄速度环
     pid_t auto_pos_pid;      // 自瞄位置环
 
-    // LQR
-    LQR_Controller_t lqr;        // 手动/导航 LQR
-    LQR_Controller_t lqr_auto;   // 自瞄 LQR
-
     // 状态
-    float spd_now = 0;       // 滤波后角速度 (deg/s)
-    float spd_raw = 0;       // 原始角速度
+    float pos_abs = 0;       // IMU世界坐标连续角度 (deg)
+    float spd_abs = 0;       // IMU世界坐标角速度 (deg/s)
+    float pos_rel = 0;       // 小Yaw相对大Yaw编码器角度 (deg)
+    float spd_rel = 0;       // 小Yaw相对大Yaw编码器角速度 (deg/s)
+    float spd_now = 0;       // 兼容字段：当前等于spd_abs
+    float spd_raw = 0;       // IMU原始角速度
     float lpf_alpha = 1.0f;  // 低通滤波系数 (0~1)
-    float pos_now = 0;       // 当前角度 (deg)
+    float pos_now = 0;       // 兼容字段：当前等于pos_abs
     float spd_set = 0;       // 目标角速度
     float pos_set = 0;       // 目标角度
     float current = 0;       // 输出电流
