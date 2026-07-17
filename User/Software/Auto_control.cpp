@@ -1,8 +1,8 @@
 /*
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
- * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-06-20 04:49:11
+ * @LastEditors: Nas-o 1319621819@qq.com
+ * @LastEditTime: 2026-07-17 23:38:40
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Auto_control.cpp
  */
 
