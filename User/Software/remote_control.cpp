@@ -1,8 +1,8 @@
 /**
  * @file  remote_control.cpp
- * @brief é¥æ§æ•°æ®æ±‡èšä¸æ§åˆ¶é€»è¾‘
- * @note  æ”¯æŒDT7é¥æ§å™¨ / VT13å›¾ä¼  / FSI6Xèˆªæ¨¡é¥æ§å™¨ ä¸‰ç§è¾“å…¥æº,
- *        ç»Ÿä¸€æ˜ å°„åˆ° RC_data ç»“æ„ä½“, å†ç”± RC_Controller() è§£æä¸ºå…¨å±€æ§åˆ¶æŒ‡ä»¤
+ * @brief Ò£¿ØÊı¾İ»ã×ÜÓë¿ØÖÆÂß¼­
+ * @note  Ö§³ÖDT7Ò£¿ØÆ÷ / VT13Í¼´« / FSI6Xº½Ä£Ò£¿ØÆ÷ ÈıÖÖÊäÈëÔ´,
+ *        Í³Ò»Ó³Éäµ½ RC_data ½á¹¹Ìå, ÔÙÓÉ RC_Controller() ½âÎöÎªÈ«¾Ö¿ØÖÆÖ¸Áî
  */
 #include "remote_control.hpp"
 #include "Global_status.hpp"
@@ -23,17 +23,17 @@
 
 #include "cmsis_os2.h"
 
-#define SHOOT_MODE_DEBOUNCE_TICKS 10  // å°„å‡»æ¨¡å¼åˆ‡æ¢å»æŠ–æ‹æ•° (10ms)
+#define SHOOT_MODE_DEBOUNCE_TICKS 10  // Éä»÷Ä£Ê½ÇĞ»»È¥¶¶ÅÄÊı (10ms)
 
 
-/*----------------------------------- é¥æ§æ•°æ®æ›´æ–° --------------------------------------*/
+/*----------------------------------- Ò£¿ØÊı¾İ¸üĞÂ --------------------------------------*/
 /**
- * @brief é¥æ§æ•°æ®æ¥æºäºDT7é¥æ§å™¨
+ * @brief Ò£¿ØÊı¾İÀ´Ô´ÓÚDT7Ò£¿ØÆ÷
  *
  */
 void DT7toRCdata()
 {
-    /*é¥æ§å™¨æ•°æ®*/
+    /*Ò£¿ØÆ÷Êı¾İ*/
     RC_data.rc.ch[0] = DT7_data.rc.ch[0];
     RC_data.rc.ch[1] = DT7_data.rc.ch[1];
     RC_data.rc.ch[2] = DT7_data.rc.ch[2];
@@ -41,7 +41,7 @@ void DT7toRCdata()
     RC_data.rc.ch[4] = DT7_data.rc.ch[4];
     RC_data.rc.s[0] = DT7_data.rc.s[0];
     RC_data.rc.s[1] = DT7_data.rc.s[1];
-    /*é”®é¼ æ•°æ® */
+    /*¼üÊóÊı¾İ */
     RC_data.key.v = DT7_data.key.v;
     RC_data.mouse.x = DT7_data.mouse.x;
     RC_data.mouse.y = DT7_data.mouse.y;
@@ -54,21 +54,21 @@ void DT7toRCdata()
 }
 
 /**
- * @brief æ¥è‡ªå›¾ä¼ çš„é¥æ§æ•°æ®
+ * @brief À´×ÔÍ¼´«µÄÒ£¿ØÊı¾İ
  *
  */
 void VT13toRCdata()
 {
-    /*é¥æ§å™¨æ•°æ®*/
+    /*Ò£¿ØÆ÷Êı¾İ*/
     RC_data.rc.ch[0] = VT13_data.rc.ch[0];
     RC_data.rc.ch[1] = VT13_data.rc.ch[1];
     RC_data.rc.ch[2] = VT13_data.rc.ch[3];
     RC_data.rc.ch[3] = VT13_data.rc.ch[2];
-    if (VT13_data.rc.shutter == 1) // æ‰³æœºé”®ä¸å¼€ç«ç›¸å¯¹åº”
+    if (VT13_data.rc.shutter == 1) // °â»ú¼üÓë¿ª»ğÏà¶ÔÓ¦
         RC_data.rc.ch[4] = 660;
     else
         RC_data.rc.ch[4] = 0;
-    // æŒ¡ä½ä¸æ‹¨æ†æ˜ å°„
+    // µµÎ»Óë²¦¸ËÓ³Éä
     if (VT13_data.rc.mode_sw == 1) // N
         RC_data.rc.s[0] = RC_SW_MID;
     if (VT13_data.rc.mode_sw == 0) // C
@@ -78,7 +78,7 @@ void VT13toRCdata()
         RC_data.rc.s[0] = RC_SW_UP;
         RC_data.rc.s[1] = RC_SW_UP;
     }
-    // æ»šè½®ä¸æ‹¨æ†æ˜ å°„
+    // ¹öÂÖÓë²¦¸ËÓ³Éä
     if (VT13_data.rc.wheel < -330)
         RC_data.rc.s[1] = RC_SW_DOWN;
     if ((VT13_data.rc.wheel > -330) && (VT13_data.rc.wheel < 330) && (VT13_data.rc.mode_sw != 2))
@@ -94,7 +94,7 @@ void VT13toRCdata()
     else
         GIMBALMotor_setzero(YAW_ZERO, YAWMotor); */
 
-    /*é”®é¼ æ•°æ® */
+    /*¼üÊóÊı¾İ */
     RC_data.key.v = VT13_data.key.v;
     RC_data.mouse.x = VT13_data.mouse.x;
     RC_data.mouse.y = VT13_data.mouse.y;
@@ -107,7 +107,7 @@ void VT13toRCdata()
 }
 
 /**
- * @brief é¥æ§æ•°æ®æ¥æºäºFS_I6Xé¥æ§å™¨
+ * @brief Ò£¿ØÊı¾İÀ´Ô´ÓÚFS_I6XÒ£¿ØÆ÷
  *
  */
 void FSI6XtoRCdata()
@@ -117,7 +117,7 @@ void FSI6XtoRCdata()
    RC_data.rc.ch[2]=FSI6X_data.CH4;
    RC_data.rc.ch[3]=FSI6X_data.CH3;
 
-   for(int i = 0 ; i<4 ; i++) // æ­»åŒºåˆ¤æ–­
+   for(int i = 0 ; i<4 ; i++) // ËÀÇøÅĞ¶Ï
    {
     if(fabs(RC_data.rc.ch[i]) < 10)
     RC_data.rc.ch[i] = 0;
@@ -130,28 +130,28 @@ void FSI6XtoRCdata()
    }
    else if (FSI6X_data.CH8==FS_UP)
    {
-     if (FSI6X_data.CH7==FS_MID && FSI6X_data.CH6 == FS_UP)// æ­£å°é™€èº
+     if (FSI6X_data.CH7==FS_MID && FSI6X_data.CH6 == FS_UP)// ÕıĞ¡ÍÓÂİ
      {
         RC_data.rc.s[0]=RC_SW_UP ;
         RC_data.rc.s[1]=RC_SW_MID;
      }
-     else if (FSI6X_data.CH7==FS_DOWN && FSI6X_data.CH6 == FS_UP)// é€†å°é™€èº
+     else if (FSI6X_data.CH7==FS_DOWN && FSI6X_data.CH6 == FS_UP)// ÄæĞ¡ÍÓÂİ
      {
         RC_data.rc.s[1]=RC_SW_DOWN;
         RC_data.rc.s[0]=RC_SW_MID;
      }
-     else if(FSI6X_data.CH6 == FS_DOWN && FSI6X_data.CH7 == FS_UP)// å¼€å¯æ‘©æ“¦è½®
+     else if(FSI6X_data.CH6 == FS_DOWN && FSI6X_data.CH7 == FS_UP)// ¿ªÆôÄ¦²ÁÂÖ
      {
-       RC_data.rc.s[1]=RC_SW_UP; 
-       RC_data.rc.s[0]=RC_SW_MID;
-       
+        RC_data.rc.s[1]=RC_SW_UP; 
+        RC_data.rc.s[0]=RC_SW_MID;
+        
      }
      else
      {
-       RC_data.rc.s[1]=RC_SW_MID; 
-       RC_data.rc.s[0]=RC_SW_MID; 
+        RC_data.rc.s[1]=RC_SW_MID; 
+        RC_data.rc.s[0]=RC_SW_MID; 
      }
-     if(FSI6X_data.CH5 == FS_DOWN) // å¼€ç«
+     if(FSI6X_data.CH5 == FS_DOWN) // ¿ª»ğ
        {
         RC_data.rc.ch[4] = 660;
        }
@@ -165,47 +165,47 @@ void FSI6XtoRCdata()
 }
 
 /**
- * @brief æ ¹æ®æ•°æ®æºä¼˜å…ˆçº§æ›´æ–°é¥æ§æ•°æ®
- * @note  ä¼˜å…ˆçº§: DT7 > FSI6X > VT13 (æ ¹æ®åœ¨çº¿çŠ¶æ€è‡ªåŠ¨åˆ‡æ¢)
+ * @brief ¸ù¾İÊı¾İÔ´ÓÅÏÈ¼¶¸üĞÂÒ£¿ØÊı¾İ
+ * @note  ÓÅÏÈ¼¶: DT7 > FSI6X > VT13 (¸ù¾İÔÚÏß×´Ì¬×Ô¶¯ÇĞ»»)
  */
 void RCdata_Updater()
 {
-    if (DT7_data.online >= 0)      // DT7åœ¨çº¿: æœ€é«˜ä¼˜å…ˆ
+    if (DT7_data.online >= 0)      // DT7ÔÚÏß: ×î¸ßÓÅÏÈ¼¶
       DT7toRCdata();
-    else if (FSI6X_data.online >= 0) // FSI6Xåœ¨çº¿
+    else if (FSI6X_data.online >= 0) // FSI6XÔÚÏß
       FSI6XtoRCdata();
-    else if (VT13_data.online >= 0)  // VT13åœ¨çº¿
+    else if (VT13_data.online >= 0)  // VT13ÔÚÏß
       VT13toRCdata(); 
 }
 
 
-/*----------------------------------- é¥æ§å™¨æ§åˆ¶é€»è¾‘ --------------------------------------*/
+/*----------------------------------- Ò£¿ØÆ÷¿ØÖÆÂß¼­ --------------------------------------*/
 /**
- * @brief é¥æ§å™¨æ§åˆ¶çŠ¶æ€æœº
- * @note  æ ¹æ®æ‹¨æ†ç»„åˆå†³å®š:
- *        - æ§åˆ¶æ¨¡å¼ (LOCK/RC)
- *        - åº•ç›˜æ¨¡å¼ (FLOW_Chassis/FLOW_Gimbal/SPIN_P/SPIN_N/Navigation)
- *        - è‡ªç„å¼€å…³ (NONE/CAR)
- *        - å°„å‡»æ¨¡å¼ (CLOSE/READY) + æ‹¨å¼¹æ¨¡å¼
- *        å¹¶åŒ…å«å°„å‡»æ¨¡å¼å»æŠ–åŠ¨å’Œå•å‘è¾¹ç¼˜æ£€æµ‹é€»è¾‘
+ * @brief Ò£¿ØÆ÷¿ØÖÆ×´Ì¬»ú
+ * @note  ¸ù¾İ²¦¸Ë×éºÏ¾ö¶¨:
+ *        - ¿ØÖÆÄ£Ê½ (LOCK/RC)
+ *        - µ×ÅÌÄ£Ê½ (FLOW_Chassis/FLOW_Gimbal/SPIN_P/SPIN_N/Navigation)
+ *        - ×ÔÃé¿ª¹Ø (NONE/CAR)
+ *        - Éä»÷Ä£Ê½ (CLOSE/READY) + ²¦µ¯Ä£Ê½
+ *        ²¢°üº¬Éä»÷Ä£Ê½È¥¶¶¶¯ºÍµ¥·¢±ßÔµ¼ì²âÂß¼­
  */
 void RC_Controller()
 {
-    static enum ShootMode s_shoot_mode_candidate = CLOSE;  // å°„å‡»æ¨¡å¼å€™é€‰å€¼
-    static uint8_t s_shoot_mode_stable_cnt = 0;            // å»æŠ–è®¡æ•°å™¨
-    static uint8_t s_single_zone_latched = 0;              // å•å‘åŒºåŸŸé”å®šæ ‡å¿—
-    static uint8_t s_single_cmd_ticks = 0;                 // å•å‘æŒ‡ä»¤æŒç»­æ‹æ•°
+    static enum ShootMode s_shoot_mode_candidate = CLOSE;  // Éä»÷Ä£Ê½ºòÑ¡Öµ
+    static uint8_t s_shoot_mode_stable_cnt = 0;            // È¥¶¶¼ÆÊıÆ÷
+    static uint8_t s_single_zone_latched = 0;              // µ¥·¢ÇøÓòËø¶¨±êÖ¾
+    static uint8_t s_single_cmd_ticks = 0;                 // µ¥·¢Ö¸Áî³ÖĞøÅÄÊı
 
     if (RC_data.online >= 0)
-        RC_data.online--;    // åœ¨çº¿è®¡æ—¶å™¨é€’å‡, è¶…æ—¶åˆ™åˆ¤å®šç¦»çº¿
+        RC_data.online--;    // ÔÚÏß¼ÆÊ±Æ÷µİ¼õ, ³¬Ê±ÔòÅĞ¶¨ÀëÏß
 
-    /*=== 1. æ§åˆ¶æ¨¡å¼é€‰æ‹© ===*/
-    // åŒæ‹¨æ†åŒæ—¶ä¸‹æ‹¨ æˆ– é¥æ§å™¨ç¦»çº¿ â†’ å…¨æœºé”æ­¢
+    /*=== 1. ¿ØÖÆÄ£Ê½Ñ¡Ôñ ===*/
+    // Ë«²¦¸ËÍ¬Ê±ÏÂ²¦ »ò Ò£¿ØÆ÷ÀëÏß ¡ú È«»úËøÖ¹
     if ((RC_data.rc.s[0]==RC_SW_DOWN && RC_data.rc.s[1]==RC_SW_DOWN) || (RC_data.online <= 0))
         Global.Control.mode = LOCK;
     else
         Global.Control.mode = RC;
-    // LOCKæ¨¡å¼: æ¸…é™¤æ‰€æœ‰æ§åˆ¶çŠ¶æ€å¹¶ç«‹å³è¿”å›
+    // LOCKÄ£Ê½: Çå³ıËùÓĞ¿ØÖÆ×´Ì¬²¢Á¢¼´·µ»Ø
     if (Global.Control.mode == LOCK)
     {
         Global.Auto.mode = NONE;
@@ -214,44 +214,44 @@ void RC_Controller()
         Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
         return;
     }
-    /*=== 2. åº•ç›˜æ¨¡å¼é€‰æ‹© ===*/
-    if (RC_data.rc.s[0]==RC_SW_UP && RC_data.rc.s[1]==RC_SW_MID)        // å³ä¸Šå·¦ä¸­: æ­£å°é™€èº
+    /*=== 2. µ×ÅÌÄ£Ê½Ñ¡Ôñ ===*/
+    if (RC_data.rc.s[0]==RC_SW_UP && RC_data.rc.s[1]==RC_SW_MID)        // ÓÒÉÏ×óÖĞ: ÕıĞ¡ÍÓÂİ
         Global.Chassis.mode = SPIN_P;
-    else if (RC_data.rc.s[1]==RC_SW_DOWN && RC_data.rc.s[0]==RC_SW_MID) // å·¦ä¸‹å³ä¸­: è´Ÿå°é™€èº
+    else if (RC_data.rc.s[1]==RC_SW_DOWN && RC_data.rc.s[0]==RC_SW_MID) // ×óÏÂÓÒÖĞ: ¸ºĞ¡ÍÓÂİ
         Global.Chassis.mode = SPIN_N;
-    else if (RC_data.rc.s[1]==RC_SW_UP && RC_data.rc.s[0]==RC_SW_UP)    // åŒä¸Š: å¯¼èˆªæ¨¡å¼
+    else if (RC_data.rc.s[1]==RC_SW_UP && RC_data.rc.s[0]==RC_SW_UP)    // Ë«ÉÏ: µ¼º½Ä£Ê½
         Global.Chassis.mode = Navigation;
-    else if (RC_data.rc.s[1]==RC_SW_MID && RC_data.rc.s[0]==RC_SW_MID)  // åŒä¸­: äº‘å°è·Ÿéš
+    else if (RC_data.rc.s[1]==RC_SW_MID && RC_data.rc.s[0]==RC_SW_MID)  // Ë«ÖĞ: ÔÆÌ¨¸úËæ
         Global.Chassis.mode = FLOW_Gimbal;
-    else                                                                // å…¶ä»–: åº•ç›˜è·Ÿéš
+    else                                                                // ÆäËû: µ×ÅÌ¸úËæ
         Global.Chassis.mode = FLOW_Chassis;
-    Chassis_SetX(RC_data.rc.ch[0] / 40.0f);  // Xè½´é€Ÿåº¦æŒ‡ä»¤
-    Chassis_SetY(RC_data.rc.ch[1] / 40.0f);  // Yè½´é€Ÿåº¦æŒ‡ä»¤
-    /*=== 3. äº‘å°æ§åˆ¶ ===*/
-    // éè‡ªç„æ§åˆ¶æ—¶, æ‰‹åŠ¨æ“ä½œäº‘å°
+    Chassis_SetX(RC_data.rc.ch[0] / 40.0f);  // XÖáËÙ¶ÈÖ¸Áî
+    Chassis_SetY(RC_data.rc.ch[1] / 40.0f);  // YÖáËÙ¶ÈÖ¸Áî
+    /*=== 3. ÔÆÌ¨¿ØÖÆ ===*/
+    // ·Ç×ÔÃé¿ØÖÆÊ±, ÊÖ¶¯²Ù×÷ÔÆÌ¨
     if (!AutoAim_IsControllingGimbal())
     {
-        // ch[3]: Pitchè½´æ‘‡æ†, ch[2]: Yawè½´æ‘‡æ†
+        // ch[3]: PitchÖáÒ¡¸Ë, ch[2]: YawÖáÒ¡¸Ë
         Gimbal_SetPitchAngle(Global.Gimbal.input.pitch + RC_data.rc.ch[3] / 2000.0f);
         Gimbal_SetYawAngle(Global.Gimbal.input.yaw - RC_data.rc.ch[2] / 2000.0f);
     }
-    /*=== 4. è‡ªç„æ§åˆ¶ ===*/
-    // å³æ‹¨æ†ä¸Š + å·¦æ‹¨æ†ä¸­/ä¸Š â†’ å¼€å¯è‡ªç„
+    /*=== 4. ×ÔÃé¿ØÖÆ ===*/
+    // ÓÒ²¦¸ËÉÏ + ×ó²¦¸ËÖĞ/ÉÏ ¡ú ¿ªÆô×ÔÃé
     if ((/* RC_data.rc.s[0]==RC_SW_DOWN || */ RC_data.rc.s[0]==RC_SW_MID || RC_data.rc.s[0]==RC_SW_UP) && RC_data.rc.s[1]==RC_SW_UP)
     {
-        Global.Auto.mode = CAR;  // è‡ªç„è·Ÿè¸ªæ¨¡å¼
+        Global.Auto.mode = CAR;  // ×ÔÃé¸ú×ÙÄ£Ê½
     }
     else
     {
-        Global.Auto.mode = NONE; // å…³é—­è‡ªç„
+        Global.Auto.mode = NONE; // ¹Ø±Õ×ÔÃé
     }
-    /*=== 5. å‘å¼¹æœºæ„æ§åˆ¶ ===*/
-    // æ‘©æ“¦è½®å¼€å¯æ¡ä»¶: å·¦æ‹¨æ†ä¸Š + å³æ‹¨æ†ä¸­/ä¸‹/ä¸Š
+    /*=== 5. ·¢µ¯»ú¹¹¿ØÖÆ ===*/
+    // Ä¦²ÁÂÖ¿ªÆôÌõ¼ş: ×ó²¦¸ËÉÏ + ÓÒ²¦¸ËÖĞ/ÏÂ/ÉÏ
     enum ShootMode desired_shoot_mode = CLOSE;
     if (RC_data.rc.s[1]==RC_SW_UP && (RC_data.rc.s[0]==RC_SW_MID || RC_data.rc.s[0]==RC_SW_DOWN || RC_data.rc.s[0]==RC_SW_UP))
         desired_shoot_mode = READY;
 
-    // å»æŠ–åŠ¨: è¿ç»­ SHOOT_MODE_DEBOUNCE_TICKS æ‹åŒä¸€çŠ¶æ€æ‰ç¡®è®¤åˆ‡æ¢
+    // È¥¶¶¶¯: Á¬Ğø SHOOT_MODE_DEBOUNCE_TICKS ÅÄÍ¬Ò»×´Ì¬²ÅÈ·ÈÏÇĞ»»
     if (desired_shoot_mode != s_shoot_mode_candidate)
     {
         s_shoot_mode_candidate = desired_shoot_mode;
@@ -267,17 +267,17 @@ void RC_Controller()
         Global.Shoot.shoot_mode = desired_shoot_mode;
     }
 
-    // æ‹¨å¼¹æ¨¡å¼é€‰æ‹© (ä»…æ‰‹åŠ¨æ¨¡å¼ä¸‹ç”Ÿæ•ˆ)
+    // ²¦µ¯Ä£Ê½Ñ¡Ôñ (½öÊÖ¶¯Ä£Ê½ÏÂÉúĞ§)
     if (Global.Shoot.shoot_mode == CLOSE || Global.Auto.mode != NONE)
     {
-        // æ‘©æ“¦è½®å…³é—­æˆ–è‡ªç„æ¨¡å¼: ç¦æ­¢æ‰‹åŠ¨æ‹¨å¼¹
+        // Ä¦²ÁÂÖ¹Ø±Õ»ò×ÔÃéÄ£Ê½: ½ûÖ¹ÊÖ¶¯²¦µ¯
         Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;
         s_single_zone_latched = 0;
         s_single_cmd_ticks = 0;
     }
     else
     {
-        // ch[4] æ‹¨è½®å€¼ [300,660]: è¿ç»­é«˜é¢‘å°„å‡»
+        // ch[4] ²¦ÂÖÖµ [300,660]: Á¬Ğø¸ßÆµÉä»÷
         if (RC_data.rc.ch[4] >= 300 && RC_data.rc.ch[4] <= 660 && (RC_data.rc.s[0] == RC_SW_UP || RC_data.rc.s[0] == RC_SW_MID || RC_data.rc.s[0]==RC_SW_DOWN))
             {
                 Global.Shoot.manual_trigger_mode = ONLY_AIM_HIGH;
@@ -286,24 +286,24 @@ void RC_Controller()
             }
         else
         {
-            // ch[4] æ‹¨è½®å€¼ [-660,-330]: å•å‘è¾¹ç¼˜æ£€æµ‹ (è¿›å…¥åŒºåŸŸå‘ä¸€å‘)
+            // ch[4] ²¦ÂÖÖµ [-660,-330]: µ¥·¢±ßÔµ¼ì²â (½øÈëÇøÓò·¢·¢)
             if ((RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330) && !s_single_zone_latched)
             {
-                s_single_zone_latched = 1;   // é”å®š: é¿å…é‡å¤è§¦å‘
-                s_single_cmd_ticks = 10;     // å•å‘æŒ‡ä»¤æŒç»­10æ‹
+                s_single_zone_latched = 1;   // Ëø¶¨: ±ÜÃâÖØ¸´´¥·¢
+                s_single_cmd_ticks = 10;     // µ¥·¢Ö¸Áî³ÖĞø10ÅÄ
             }
             else if (!(RC_data.rc.ch[4] >= -660 && RC_data.rc.ch[4] <= -330))
             {
-                s_single_zone_latched = 0;   // ç¦»å¼€åŒºåŸŸ: è§£é”
+                s_single_zone_latched = 0;   // Àë¿ªÇøÓò: ½âËø
             }
             if (s_single_cmd_ticks > 0)
             {
-                Global.Shoot.manual_trigger_mode = SINGLE;  // å•å‘ä¸­
+                Global.Shoot.manual_trigger_mode = SINGLE;  // µ¥·¢ÖĞ
                 s_single_cmd_ticks--;
             }
             else
             {
-                Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;  // ç©ºé—²
+                Global.Shoot.manual_trigger_mode = TRIGGER_CLOSE;  // ¿ÕÏĞ
             }
         }
     }
@@ -312,14 +312,14 @@ void RC_Controller()
 /*------------------------------------ Task -------------------------------------*/
 
 /**
- * @brief          é¥æ§ä»»åŠ¡
+ * @brief          Ò£¿ØÈÎÎñ
  * @param          none
  * @retval         none
  */
 void Remote_Tasks(void)
 {
-	// é¥æ§æ•°æ®æ›´æ–°
-	RCdata_Updater();
-    // é¥æ§å™¨æ§åˆ¶
+    // Ò£¿ØÊı¾İ¸üĞÂ
+    RCdata_Updater();
+    // Ò£¿ØÆ÷¿ØÖÆ
     RC_Controller();
 }
