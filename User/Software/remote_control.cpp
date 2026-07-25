@@ -74,9 +74,9 @@ void RCdataSync()
         return;
     }
 
-    RC_data.rc.ch[0] = active_command.chassis_x;
-    RC_data.rc.ch[1] = active_command.chassis_y;
-    RC_data.rc.ch[2] = active_command.chassis_r;
+    RC_data.rc.ch[0] = active_command.chassis_on ? active_command.chassis_x : 0;
+    RC_data.rc.ch[1] = active_command.chassis_on ? active_command.chassis_y : 0;
+    RC_data.rc.ch[2] = active_command.chassis_on ? active_command.chassis_r : 0;
     RC_data.rc.ch[3] = active_command.gimbal_pitch;
     RC_data.rc.ch[4] = active_command.trigger;
     RC_data.key.v = active_command.key;
@@ -181,11 +181,19 @@ void RC_Controller()
     Global.Chassis.mode = active_command.chassis_mode;
     Global.Auto.mode = active_command.auto_mode;
 
-    Chassis_SetX(active_command.chassis_x / 40.0f);
-    Chassis_SetY(active_command.chassis_y / 40.0f);
+    if (active_command.chassis_on)
+    {
+        Chassis_SetX(active_command.chassis_x / 40.0f);
+        Chassis_SetY(active_command.chassis_y / 40.0f);
+    }
+    else
+    {
+        Chassis_SetX(0.0f);
+        Chassis_SetY(0.0f);
+    }
 
     // 先更新自瞄模式，再决定本周期是否接受手动云台增量。
-    if (!AutoAim_IsControllingGimbal())
+    if (active_command.gimbal_on && !AutoAim_IsControllingGimbal())
     {
         Gimbal_SetPitchAngle(Global.Gimbal.input.pitch +
                              active_command.gimbal_pitch / 2000.0f);
@@ -206,7 +214,7 @@ void RC_Controller()
 
 void Remote_Tasks(void)
 {
-    OnlineTick();
+    OnlineTick();     
     RemotePick();
     RCdataSync();
     RC_Controller();

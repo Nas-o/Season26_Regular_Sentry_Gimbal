@@ -12,6 +12,8 @@ uint8_t VT13_BuildRemoteCommand(RemoteCommand *command)
     memset(command, 0, sizeof(*command));
     command->source = REMOTE_SOURCE_VT13;
     command->online = 1U;
+    command->chassis_on = 1U;
+    command->gimbal_on = 1U;
 
     uint16_t right_switch = RC_SW_MID;
     uint16_t left_switch = RC_SW_MID;

@@ -11,6 +11,8 @@ uint8_t DT7_BuildRemoteCommand(RemoteCommand *command)
     memset(command, 0, sizeof(*command));
     command->source = REMOTE_SOURCE_DT7;
     command->online = 1U;
+    command->chassis_on = 1U;
+    command->gimbal_on = 1U;
 
     const uint16_t right_switch = DT7_data.rc.s[0];
     const uint16_t left_switch = DT7_data.rc.s[1];

@@ -1,3 +1,10 @@
+/*
+ * @Author: Nas-o 1319621819@qq.com
+ * @Date: 2026-07-25 10:16:04
+ * @LastEditors: Nas-o 1319621819@qq.com
+ * @LastEditTime: 2026-07-25 18:57:34
+ * @FilePath: \Season26_Regular_Sentry_Gimbal\User\System\remote_command.hpp
+ */
 #ifndef REMOTE_COMMAND_HPP_
 #define REMOTE_COMMAND_HPP_
 
@@ -16,13 +23,13 @@ typedef enum RemoteSource
     REMOTE_SOURCE_VT13,
 } RemoteSource;
 
-/* Unified operator intent. Axis values retain the existing signed channel
- * scale so this refactor does not change control sensitivity. */
 typedef struct RemoteCommand
 {
     RemoteSource source;
     uint8_t online;
     uint8_t lock_requested;
+    uint8_t chassis_on;
+    uint8_t gimbal_on;
 
     ChassisMode chassis_mode;
     AutoMode auto_mode;
