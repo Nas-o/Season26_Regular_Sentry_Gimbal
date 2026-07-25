@@ -17,6 +17,7 @@
 
 #include "DT7.hpp"
 #include "VT13.hpp"
+#include "FSI6X.hpp"
 #include "IMU_updata.hpp"
 #include "hi229_imu.hpp"
 #include "referee_system.hpp"
@@ -161,13 +162,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   }
   else if (huart->Instance == UART5) // 遥控器
   {
-    DT7_DecodeData(UART5_data.rev_data);
-   /*富斯遥控器  
+/*     DT7_DecodeData(UART5_data.rev_data); */
    if( UART5_data.rev_data[23] != 12 ) 
     {
       FSI6X_DecodeData(UART5_data.rev_data, &FSI6X_data);
     } 
-    */
+    
 
     // 重新启动DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(huart, UART5_data.rev_data, UART_BUFFER_SIZE);
