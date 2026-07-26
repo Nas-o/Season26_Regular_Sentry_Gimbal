@@ -34,7 +34,11 @@ uint8_t FSI6X_BuildRemoteCommand(RemoteCommand *command)
 
     if (ch7_up)
     {
-        command->chassis_mode = aim_on ? Navigation : SPIN_N;
+        command->chassis_mode = aim_on ? Navigation : SPIN_P;
+    }
+    else if (aim_on)
+    {
+        command->chassis_mode = FLOW_Chassis;
     }
     else if (ch7_mid)
     {
