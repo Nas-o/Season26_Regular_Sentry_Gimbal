@@ -178,7 +178,8 @@ namespace
         relative_tick = HAL_GetTick();
     }
 
-    const TxFrame kTxFrames[] = {
+    const TxFrame kTxFrames[] = 
+    {
         {BoardLinkCanId::ChassisSpeedXY, Pack_XY_Speed, 1, 0},
         {BoardLinkCanId::ChassisSpeedRYaw, Pack_R_Yaw, 1, 0},
         {BoardLinkCanId::ChassisImuAttitude, Pack_IMU_Attitude, 1, 0},
@@ -190,7 +191,8 @@ namespace
 
     constexpr uint8_t kTxFrameCount = sizeof(kTxFrames) / sizeof(kTxFrames[0]);
 
-    const RxFrame kRxFrames[] = {
+    const RxFrame kRxFrames[] = 
+    {
         {BoardLinkCanId::GimbalRelativeAngle, Receive_RelativeAngle},
         {BoardLinkCanId::RefereeData1, Receive_RefereeData1},
         {BoardLinkCanId::RefereeData2, Receive_RefereeData2},
@@ -199,7 +201,7 @@ namespace
 
     /* ============== 通用快发机制 ============== */
 
-    uint8_t g_tick = 0;                       // 调度tick计数
+    uint8_t g_tick = 0;                        // 调度tick计数
     uint8_t g_fast_resend[kTxFrameCount] {};  // 每帧快发剩余拍数
 
     /**
@@ -240,7 +242,8 @@ namespace
     }
 
     // 边沿监视表: 需要自动快发的变量在此注册
-    EdgeWatch g_edges[] = {
+    EdgeWatch g_edges[] = 
+    {
         {BL_ID_TRIGGER_MODE, SampleTriggerMode, 0},
         {BL_ID_CONTROL_MODE, SampleControlMode, 0},
     };

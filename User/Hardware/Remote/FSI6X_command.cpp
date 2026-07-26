@@ -23,7 +23,6 @@ uint8_t FSI6X_BuildRemoteCommand(RemoteCommand *command)
     const uint8_t ch7_valid = (ch7_up || ch7_mid || ch7_down) ? 1U : 0U;
     const uint8_t aim_on = (ch5_up && ch6_up) ? 1U : 0U;
 
-    // CH8 is the master enable: only the explicit UP position may unlock.
     command->lock_requested = (FSI6X_data.CH8 == FS_UP) ? 0U : 1U;
     command->shoot_mode = ch5_up ? READY : CLOSE;
     command->auto_mode = aim_on ? CAR : NONE;
@@ -31,7 +30,7 @@ uint8_t FSI6X_BuildRemoteCommand(RemoteCommand *command)
         (aim_on || (ch5_valid && ch6_down)) ? 1U : 0U;
     command->chassis_on =
         (ch7_valid && (!aim_on || ch7_up)) ? 1U : 0U;
-
+    command->trigger = 0;
     if (ch7_up)
     {
         command->chassis_mode = aim_on ? Navigation : SPIN_P;
@@ -48,13 +47,10 @@ uint8_t FSI6X_BuildRemoteCommand(RemoteCommand *command)
     {
         command->chassis_mode = FLOW_Chassis;
     }
-
-    if (FSI6X_data.CH9 <= FS_MID && FSI6X_data.CH10 >= FS_MID)
+    if (FSI6X_data.CH9 == FS_UP && FSI6X_data.CH10 == FS_DOWN)
         command->trigger = 660;
-    else if (FSI6X_data.CH9 <= FS_MID && FSI6X_data.CH10 <= FS_MID)
+    else if (FSI6X_data.CH9 == FS_UP && FSI6X_data.CH10 == FS_UP)
         command->trigger = -660;
-    else
-        command->trigger = 0;
 
     command->chassis_x = (int16_t)FSI6X_data.CH1;
     command->chassis_y = (int16_t)FSI6X_data.CH2;
