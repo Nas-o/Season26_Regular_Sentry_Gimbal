@@ -94,12 +94,17 @@ namespace
         const float relative = SnapshotRelativeAngle();
         const float encoder_relative = (float)DJIMotor_GetData(SMALLYAWMotor).angle;
 
-        if (AutoAim_ShouldBigYawFollow())
+        if (AutoAim_ShouldBigYawFollow() || (Global.Chassis.mode == ChassisMode::FLOW_Gimbal))
         {
             return relative + encoder_relative;
         }
+        else
+        {
+            return 0;
+        }
 
-        return Global.Gimbal.input.yaw;
+        /* return Global.Gimbal.input.yaw; */
+
     }
 
     void Pack_XY_Speed(uint8_t data[kCanFrameLength])
@@ -110,7 +115,7 @@ namespace
 
     void Pack_R_Yaw(uint8_t data[kCanFrameLength])
     {
-        Gimbal.big_yaw.pos_set = 0;//ComputeBigYawSetpoint();
+        Gimbal.big_yaw.pos_set = ComputeBigYawSetpoint();
         StoreFloat(ChassisLinkMotion.r, &data[0]);
         StoreFloat(Gimbal.big_yaw.pos_set, &data[4]);
     }
