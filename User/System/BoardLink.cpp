@@ -110,7 +110,7 @@ namespace
 
     void Pack_R_Yaw(uint8_t data[kCanFrameLength])
     {
-        Gimbal.big_yaw.pos_set = ComputeBigYawSetpoint();
+        Gimbal.big_yaw.pos_set = 0;//ComputeBigYawSetpoint();
         StoreFloat(ChassisLinkMotion.r, &data[0]);
         StoreFloat(Gimbal.big_yaw.pos_set, &data[4]);
     }

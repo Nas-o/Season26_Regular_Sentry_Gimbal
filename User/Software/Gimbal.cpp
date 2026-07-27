@@ -1,8 +1,8 @@
 /*
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
- * @LastEditors: Nas(1319621819@qq.com)
- * @LastEditTime: 2026-06-05 19:55:59
+ * @LastEditors: Nas-o 1319621819@qq.com
+ * @LastEditTime: 2026-07-27 09:07:08
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.cpp
  * @brief  云台控制器 —— C++类实现: 初始化、数据更新、控制解算、电机输出
 */
@@ -42,30 +42,6 @@ void GimbalController::limit(float pitch_up, float pitch_down, float yaw_l, floa
         pitch.pos_set = pitch_down;
 }
 
-/*-------------------- Private: getBigYawFF_DegS --------------------*/
-
-/**
- * @brief  获取大Yaw轴角速度前馈 (单位: deg/s)
- * @return 大Yaw前馈值, 用于补偿底盘旋转对小Yaw的扰动
- * @note   - 当编码器数据不新鲜(通信丢失)时返回0, 避免使用过期数据
- *         - 前馈值 = -(大yaw角速度 × 前馈增益)
- *         - 若前馈绝对值超过阈值 aa_big_yaw_ff_max_deg_s, 则视为异常返回0
- *         - 负号表示方向补偿: 底盘顺时针转 → 小yaw需逆时针补偿
- */
-float GimbalController::getBigYawFF_DegS()
-{
-    // 编码器数据超时 → 不做前馈补偿
-    if (!RelativeAngle_IsFresh())
-        return 0.0f;
-
-    // 计算前馈: 大yaw实际角速度 × 增益, 取反方向
-    float ff = -yaw.big_ff * big_yaw_ff_gain;
-    // 超限保护: 防止通信抖动产生过大前馈
-    if (fabsf(ff) > big_yaw_ff_max_deg_s)
-        return 0.0f;
-
-    return ff;
-}
 
 /*-------------------- Public: init --------------------*/
 
@@ -88,21 +64,16 @@ void GimbalController::init()
     
     /* ---- 2. Pitch MIT模式参数 ---- */
     pitch.kp = 18.0f;
-    pitch.kd = 1.2f;
+    pitch.kd = 1.1f;
     // k_gravity: 静态重力力矩系数, 用于 τ = k*cos(θ) 前馈补偿
     pitch.k_gravity = 0.891800784f;
 
     /* ---- 3. 小Yaw PID 串级初始化 ---- */
 
-    PID_Set(&yaw.spd_pid,      65.0f, 0.01f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
-    PID_Set(&yaw.auto_spd_pid, 85.0f, 0.01f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
-    PID_Set(&yaw.pos_pid,      18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, 1000);
-    PID_Set(&yaw.auto_pos_pid, 18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, 1000);
-
-    // 小yaw速度一阶低通滤波: alpha=1.0 表示不滤波(直通)
-    yaw.lpf_alpha = 1.0f;
-    yaw.spd_now = 0.0f;
-    yaw.spd_raw = 0.0f;
+    PID_Set(&yaw.spd_pid,      65.0f, 0.0f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
+    PID_Set(&yaw.auto_spd_pid, 85.0f, 0.0f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
+    PID_Set(&yaw.pos_pid,      18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
+    PID_Set(&yaw.auto_pos_pid, 18.0f, 0.0f,  1.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
 
     /* ---- 4. 小Yaw 编码器零点 ---- */
     // 设置GM6020编码器零偏, 使相对角度=0对应云台正前方
@@ -112,12 +83,6 @@ void GimbalController::init()
     // inited=0: 等待DM4310首包反馈后完成零位标定
     pitch.inited = 0;
     pitch.offset = 0.0f;
-
-    /* ---- 6. 重力积分补偿器 ---- */
-    // 用积分消除静态重力补偿的残差 (k_gravity标定不精确时)
-    pitch.grav_integral = 0.0f;   // 积分累计值
-    pitch.ki_grav = 0.1f;         // 积分增益
-    pitch.grav_int_limit = 0.8f;  // 积分限幅 (Nm)
 
     /* ---- 7. 大Yaw前馈 ---- */
     // 由CAN接收大yaw电机角速度, 用于小yaw前馈补偿
@@ -190,7 +155,7 @@ void GimbalController::update()
     }
     else
     {
-        if (Global.Chassis.mode == FLOW_Gimbal)
+        /* if (Global.Chassis.mode == FLOW_Gimbal)
         {
             // 底盘跟随云台模式: 小yaw需用编码器补偿底盘转动
             // enc_rel: 小yaw相对底盘的偏移角
@@ -199,10 +164,11 @@ void GimbalController::update()
             yaw.pos_set = yaw.pos_now - enc_rel;
         }
         else
-        {
+        { */
             // 其他模式: 直接使用遥控器/键鼠设定的目标角
             yaw.pos_set = Global.Gimbal.input.yaw;
-        }
+            /* Global.Gimbal.input.yaw = yaw.pos_now; */
+       /*  } */
     }
 }
 
@@ -224,9 +190,7 @@ void GimbalController::calculate()
         if (AutoAim_IsScanning())
         {
             // 场景A: 扫描模式 → 纯速度环
-            float ff = getBigYawFF_DegS();
-            float cmd = yaw.spd_set + ff;
-            yaw.current = PID_Cal(&yaw.spd_pid, yaw.spd_rel, cmd);
+            yaw.current = PID_Cal(&yaw.spd_pid, yaw.spd_rel, yaw.spd_set);
         }
         else
         {
@@ -244,7 +208,7 @@ void GimbalController::calculate()
         // 速度指令 = 位置环输出 + 视觉角速度前馈 + 大Yaw前馈
         yaw.spd_set = PID_Cal(&yaw.auto_pos_pid,
                               yaw.pos_now, yaw.pos_set)
-                    + yaw_ff + getBigYawFF_DegS();
+                    + yaw_ff ;
 
         yaw.current = PID_Cal(&yaw.auto_spd_pid,
                               yaw.spd_now, yaw.spd_set);
@@ -281,18 +245,22 @@ void GimbalController::control()
         // yaw_release=1: 小yaw不输出力矩, 让底盘自由跟随
         // 条件: (底盘跟随且无自瞄) 或 (云台跟随模式)
         uint8_t yaw_release =
-            ((Global.Chassis.mode == FLOW_Chassis && Global.Auto.mode == NONE) ||
-             (Global.Chassis.mode == FLOW_Gimbal));
+            ((Global.Chassis.mode == FLOW_Chassis && Global.Auto.mode == NONE) /* ||
+             (Global.Chassis.mode == FLOW_Gimbal) */);
 
         /* ---- 底盘模式切换 → 重置Yaw ---- */
         // 从底盘跟随切到非释放 / 从云台跟随切出: 清零积分, 对齐目标
-        if ((last_chassis_mode_ == FLOW_Chassis && !yaw_release) ||
-            (last_chassis_mode_ == FLOW_Gimbal && Global.Chassis.mode != FLOW_Gimbal))
+        if ((last_chassis_mode_ == FLOW_Chassis && !yaw_release) /* ||
+            (last_chassis_mode_ == FLOW_Gimbal && Global.Chassis.mode != FLOW_Gimbal) */)
         {
             Global.Gimbal.input.yaw = yaw.pos_now;
             yaw.pos_set = yaw.pos_now;
             yaw.spd_pid.i_out = 0;
             yaw.auto_spd_pid.i_out = 0;
+            PID_Reset(&yaw.spd_pid, yaw.spd_now, yaw.spd_now);
+            PID_Reset(&yaw.auto_spd_pid, yaw.spd_now, yaw.spd_now);
+            PID_Reset(&yaw.pos_pid, yaw.pos_now, yaw.pos_now);
+            PID_Reset(&yaw.auto_pos_pid, yaw.pos_now, yaw.pos_now);
         }
 
         /* ---- Pitch重力补偿 ---- */
@@ -310,23 +278,15 @@ void GimbalController::control()
                 Global.Gimbal.input.yaw = imu_gimbal.yaw_cnt;
                 yaw.pos_set = Global.Gimbal.input.yaw;
                 // 清零积分补偿, 防止解锁时积累的积分引起过冲
-                pitch.grav_integral = 0.0f;
-                PID_Reset(&yaw.spd_pid, yaw.spd_now, 0.0f);
-                PID_Reset(&yaw.auto_spd_pid, yaw.spd_now, 0.0f);
+                PID_Reset(&yaw.spd_pid, yaw.spd_now, yaw.spd_now);
+                PID_Reset(&yaw.auto_spd_pid, yaw.spd_now, yaw.spd_now);
                 PID_Reset(&yaw.pos_pid, yaw.pos_now, yaw.pos_now);
                 PID_Reset(&yaw.auto_pos_pid, yaw.pos_now, yaw.pos_now);
              }
 
-             /* ---- Pitch重力积分补偿 ---- */
-             // 用位置误差积分修正重力补偿系数的标定偏差
-             float err = pitch.pos_set - pitch.pos_now;
-             pitch.grav_integral += pitch.ki_grav * err * kCtrlDt;
-             pitch.grav_integral = clamp(pitch.grav_integral,
-                                         -pitch.grav_int_limit,
-                                          pitch.grav_int_limit);
 
              // 总前馈力矩 = 静态重力 + 积分修正
-             float torque_ff = pitch.grav_comp + pitch.grav_integral;
+             float torque_ff = pitch.grav_comp ;
              // 电机端目标位置 = IMU目标角(rad) + 零位偏移
              float target_motor = pitch.pos_set + pitch.offset;
              
