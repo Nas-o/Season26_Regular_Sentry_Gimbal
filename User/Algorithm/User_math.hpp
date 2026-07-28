@@ -19,7 +19,7 @@ extern "C" {
 #define PI	3.14159265358979f
 #define SQRT1_2 0.70710678118f  // 1/sqrt(2)
 #define SQRT2   1.41421356237f  // sqrt(2)
-
+#define G   9.80665f // 重力加速度 (m/s^2)
 
 //单位转换
 #define RAD_S_TO_RPM (30.0f/PI)

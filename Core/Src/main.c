@@ -100,7 +100,6 @@ uint32_t fdcan_freq;                   // FDCAN 外设时钟频率 (用于波特率校验)
   * * @retval intr
   */
 int main(void)
-
 {
   /* USER CODE BEGIN 1 */
 

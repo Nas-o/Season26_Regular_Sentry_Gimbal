@@ -2,7 +2,7 @@
  * @Author: Nas(1319621819@qq.com)
  * @Date: 2025-11-03 00:07:24
  * @LastEditors: Nas-o 1319621819@qq.com
- * @LastEditTime: 2026-07-27 09:07:08
+ * @LastEditTime: 2026-07-28 12:29:14
  * @FilePath: \Season26_Regular_Sentry_Gimbal\User\Software\Gimbal.cpp
  * @brief  云台控制器 —— C++类实现: 初始化、数据更新、控制解算、电机输出
 */
@@ -63,11 +63,13 @@ void GimbalController::init()
     DJIMotor_Init(DJI_GM6020, SMALLYAWMotor);
     
     /* ---- 2. Pitch MIT模式参数 ---- */
-    pitch.kp = 18.0f;
-    pitch.kd = 1.1f;
-    // k_gravity: 静态重力力矩系数, 用于 τ = k*cos(θ) 前馈补偿
-    pitch.k_gravity = 0.891800784f;
 
+    pitch.m = 1.324f; // 云台质量 (kg)
+    pitch.pitch_length = 0.05437f; // 云台臂长 (m) 
+    pitch.pitch_angle_offset = 13.13f; // 云台安装角度偏移 (deg)
+
+    PID_Set(&pitch.spd_pid,  0.0f, 0.0f, 0.0f, 0.0f, 7, 100);
+    PID_Set(&pitch.pos_pid,  2.0f, 0.0f, 0.0f, 0.0f, 500, 100);
     /* ---- 3. 小Yaw PID 串级初始化 ---- */
 
     PID_Set(&yaw.spd_pid,      65.0f, 0.0f, 3.0f, 0.0f, GIMBAL_MAX_CURRENT, GIMBAL_MAX_CURRENT);
@@ -105,12 +107,8 @@ void GimbalController::update()
     // Yaw角速度: 将IMU body系角速度投影到水平面
     // 公式: ωyaw = cos(pitch)*ωz - sin(pitch)*ωx
     // 原因: IMU固连在Pitch轴上, 当Pitch倾斜时z轴不再垂直
-    yaw.spd_raw = cos(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[2])
+    yaw.spd_now = cos(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[2])
                 - sin(degree2rad(imu_gimbal.pitch)) * rad2degree(imu_gimbal.gyro[0]);
-    // 一阶低通滤波: y[n] = α*x[n] + (1-α)*y[n-1]
-    yaw.spd_now = yaw.lpf_alpha * yaw.spd_raw
-                + (1.0f - yaw.lpf_alpha) * yaw.spd_now;
-    yaw.spd_abs = yaw.spd_now;
     // Pitch角速度: 直接取IMU Y轴陀螺仪 (取反匹配坐标系)
     pitch.spd_now = -imu_gimbal.gyro[1];
 
@@ -142,7 +140,7 @@ void GimbalController::update()
     /*=== 3. 目标量更新 ===*/
     // Pitch目标: 从全局输入(度)转弧度
     pitch.pos_set = degree2rad(Global.Gimbal.input.pitch);
-
+    pitch.torque_ff = pitch.m * G * pitch.pitch_length * cos(pitch.pos_now - degree2rad(pitch.pitch_angle_offset));
     // Yaw目标: 根据自瞄/底盘模式分支
     if (AutoAim_IsControllingGimbal())
     {
@@ -191,12 +189,15 @@ void GimbalController::calculate()
         {
             // 场景A: 扫描模式 → 纯速度环
             yaw.current = PID_Cal(&yaw.spd_pid, yaw.spd_rel, yaw.spd_set);
+            pitch.current = 0;
         }
         else
         {
             // 场景B: 手动模式 → 位置环输出速度指令 → 速度环输出电流
             yaw.spd_set = PID_Cal(&yaw.pos_pid, yaw.pos_now, yaw.pos_set);
             yaw.current = PID_Cal(&yaw.spd_pid, yaw.spd_now, yaw.spd_set);
+            pitch.spd_set = PID_Cal(&pitch.pos_pid, pitch.pos_now, pitch.pos_set);
+            pitch.current = pitch.torque_ff /* + PID_Cal(&pitch.spd_pid, pitch.spd_now, pitch.spd_set) */;
         }
     }
     else
@@ -264,8 +265,6 @@ void GimbalController::control()
         }
 
         /* ---- Pitch重力补偿 ---- */
-        // 静态力矩: τ = k × cos(θ), θ为当前Pitch角(rad)
-        pitch.grav_comp = pitch.k_gravity * cos(pitch.pos_now);
 
         if (pitch.inited == 1)
         {
@@ -284,12 +283,6 @@ void GimbalController::control()
                 PID_Reset(&yaw.auto_pos_pid, yaw.pos_now, yaw.pos_now);
              }
 
-
-             // 总前馈力矩 = 静态重力 + 积分修正
-             float torque_ff = pitch.grav_comp ;
-             // 电机端目标位置 = IMU目标角(rad) + 零位偏移
-             float target_motor = pitch.pos_set + pitch.offset;
-             
              // 自瞄跟踪时叠加视觉Pitch速度前馈
              float vel_ff = 0;
              if (AutoAim_IsTracking())
@@ -297,8 +290,8 @@ void GimbalController::control()
 
              /* ---- Pitch MIT-PD路径 ---- */
              // MIT模式: pos=target, vel=前馈, torque=重力补偿, kp/kd=刚度阻尼
-             DMMotor_Set(PITCHMotor, target_motor, vel_ff, torque_ff,
-                         pitch.kp, pitch.kd);
+             DMMotor_Set(PITCHMotor, 0, 0, pitch.current,
+                         0, 0);
         }
         else
         {

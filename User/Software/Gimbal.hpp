@@ -38,6 +38,8 @@ namespace robot::gimbal
 /** @brief Pitch轴数据 */
 struct PitchAxis 
 {
+    pid_t spd_pid;          // 速度环PID
+    pid_t pos_pid;          // 位置环PID
     float spd_now = 0;      // 当前角速度 (rad/s)
     float pos_now = 0;      // 当前角度 (rad)
     float spd_set = 0;      // 目标角速度
@@ -48,15 +50,14 @@ struct PitchAxis
     // MIT 参数
     float kp = 0;           // 位置比例增益
     float kd = 0;           // 速度阻尼增益
-    float k_gravity = 0;    // 重力前馈系数
     float offset = 0;       // IMU-电机坐标差
     uint8_t inited = 0;     // 初始化完成标志
 
     // 重力补偿
-    float grav_comp = 0;    // cos模型补偿
-    float grav_integral = 0;// 积分力矩修正
-    float ki_grav = 0;      // 积分增益
-    float grav_int_limit = 0;// 积分限幅 (N·m)
+    float torque_ff = 0;    // 总前馈力矩
+    float m;
+    float pitch_length;     // 云台臂长
+    float pitch_angle_offset; // 云台安装角度偏移
 
 };
 
